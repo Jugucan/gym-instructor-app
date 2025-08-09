@@ -456,7 +456,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-inter">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">Dashboard</h1>
-      <p className="text-gray-600 text-sm mb-4">Data d'avui (segons l'aplicació): <span className="font-semibold">{todayNormalized.toLocaleDateString('ca-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span></p>
+      <p className="text-gray-600 text-sm mb-4">Data d'avui: <span className="font-semibold">{todayNormalized.toLocaleDateString('ca-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span></p>
 
 
       {/* Programs in Current Rotation */}
@@ -2846,7 +2846,7 @@ function App() {
       {/* Navigation */}
       <nav className="bg-gradient-to-r from-blue-600 to-blue-800 p-4 shadow-lg">
         <div className="container mx-auto flex justify-between items-center">
-          <h1 className="text-white text-2xl font-bold">LES MILLS App</h1>
+          <h1 className="text-white text-2xl font-bold">Gym Instructor</h1> {/* Changed app name */}
           <div className="space-x-4">
             <button onClick={() => setCurrentPage('dashboard')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Dashboard</button>
             <button onClick={() => setCurrentPage('programs')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Programes</button>
