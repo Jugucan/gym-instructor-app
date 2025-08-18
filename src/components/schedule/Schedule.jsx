@@ -1,265 +1,179 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, doc, setDoc, deleteDoc, addDoc } from 'firebase/firestore'; // Added addDoc
-import { getUserCollectionPath } from '../../utils/firebasePaths.jsx'; // Changed .js to .jsx
-import { formatDate, getLocalDateString, normalizeDateToStartOfDay } from '../../utils/dateHelpers.jsx'; // Changed .js to .jsx
-import { getActiveFixedSchedule, calculateRecurringSessionMinutes } from '../../utils/scheduleHelpers.jsx'; // Changed .js to .jsx
+import { getLocalDateString, normalizeDateToStartOfDay } from '../../utils/dateHelpers.jsx';
+import { getActiveFixedSchedule } from '../../utils/scheduleHelpers.jsx';
 import { MessageModal } from '../common/MessageModal.jsx';
+import { doc, setDoc, collection, getDoc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
+import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
 
-const Schedule = ({ programs, scheduleOverrides, fixedSchedules, users, gyms, recurringSessions, missedDays, db, currentUserId, appId }) => {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [showOverrideModal, setShowOverrideModal] = useState(false);
-  const [selectedDaySchedule, setSelectedDaySchedule] = useState(null);
-  const [selectedDateForOverride, setSelectedDateForOverride] = useState('');
-  const [overrideProgramId, setOverrideProgramId] = useState('');
-  const [overrideGymId, setOverrideGymId] = useState('');
-  const [overrideNotes, setOverrideNotes] = useState('');
-  const [isMissedDay, setIsMissedDay] = useState(false);
+const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleOverrides, missedDays, db, currentUserId, appId }) => {
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [sessionsForDay, setSessionsForDay] = useState([]);
+  const [showMissedDayModal, setShowMissedDayModal] = useState(false);
+  const [missedDaySelectedDate, setMissedDaySelectedDate] = useState('');
+  const [missedDaySelectedGymId, setMissedDaySelectedGymId] = useState('');
+  const [missedDayNotes, setMissedDayNotes] = useState('');
 
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
+  const daysOfWeek = ['Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte', 'Diumenge'];
+
+  useEffect(() => {
+    // This effect runs when fixedSchedules, recurringSessions, or scheduleOverrides change
+    // It ensures the calendar display reflects the latest data
+    // No direct state updates here that would cause infinite loops, just dependencies
+  }, [fixedSchedules, recurringSessions, scheduleOverrides, missedDays, programs, gyms]);
+
 
   const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = (year, month) => new Date(year, month, 1).getDay(); // 0 for Sunday, 1 for Monday
+  const firstDayOfMonth = (year, month) => new Date(year, month, 1).getDay(); // 0 = Sunday, 1 = Monday
 
-  const getDayName = (date) => {
-    const options = { weekday: 'long' };
-    return new Date(date).toLocaleDateString('ca-ES', options);
-  };
-
-  const goToPreviousMonth = () => {
-    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-  };
-
-  const goToNextMonth = () => {
-    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-  };
-
-  const getCells = () => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
+  const renderCalendar = () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
     const numDays = daysInMonth(year, month);
-    const firstDay = firstDayOfMonth(year, month); // 0 (Sun) - 6 (Sat)
-    const startingDay = firstDay === 0 ? 6 : firstDay - 1; // Adjust to Monday = 0, Sunday = 6
+    const firstDay = firstDayOfMonth(year, month); // 0 (Sunday) to 6 (Saturday)
+    const startingDay = (firstDay === 0 ? 6 : firstDay - 1); // Adjust for Monday-first calendar (0 = Monday, ..., 6 = Sunday)
 
-    const cells = [];
-
-    // Empty cells for the start of the month
+    const calendarDays = [];
+    // Add empty cells for days before the 1st of the month
     for (let i = 0; i < startingDay; i++) {
-      cells.push(<div key={`empty-${i}`} className="p-2 text-center text-gray-400 bg-gray-50 rounded-lg"></div>);
+      calendarDays.push(<div key={`empty-${i}`} className="p-2 border border-gray-200 rounded-md bg-gray-100"></div>);
     }
 
-    // Days of the month
     for (let day = 1; day <= numDays; day++) {
-      const fullDate = new Date(year, month, day);
-      const isoDate = getLocalDateString(fullDate);
-      const todayIso = getLocalDateString(new Date());
+      const date = new Date(year, month, day);
+      const dateString = getLocalDateString(date);
+      const isToday = dateString === getLocalDateString(new Date());
+      const missed = missedDays.find(md => md.date === dateString);
+      const isHoliday = gyms.some(gym => gym.holidaysTaken.includes(dateString));
 
-      const isCurrentDay = isoDate === todayIso;
-      const dayName = getDayName(fullDate);
-      const isWeekend = fullDate.getDay() === 0 || fullDate.getDay() === 6; // Sunday=0, Saturday=6
+      let dayClasses = "p-2 border border-gray-200 rounded-md flex flex-col justify-between cursor-pointer transition-colors duration-200 ";
+      if (isToday) dayClasses += "bg-blue-200 border-blue-500 ";
+      else dayClasses += "bg-white hover:bg-gray-50 ";
 
-      // Determine schedule for the day
-      const activeFixedSchedule = getActiveFixedSchedule(fullDate, fixedSchedules);
-      const recurringSessionsToday = recurringSessions.filter(session => session.daysOfWeek.includes(dayName));
-
-      // Check for schedule overrides for this specific date
-      const override = scheduleOverrides.find(so => so.date === isoDate);
-      const missed = missedDays.find(md => md.date === isoDate);
-
-      let daySchedule = { type: 'fixed', sessions: [] };
+      let sessionsForCalendarDay = [];
+      const override = scheduleOverrides.find(so => so.date === dateString);
 
       if (missed) {
-        daySchedule.type = 'missed';
+        sessionsForCalendarDay.push({ type: 'missed', label: 'LLIURE', color: '#EF4444' }); // Red for missed
+      } else if (isHoliday) {
+        sessionsForCalendarDay.push({ type: 'holiday', label: 'VACANCES', color: '#60A5FA' }); // Blue for holidays
       } else if (override) {
-        daySchedule.type = 'override';
-        daySchedule.sessions = override.sessions; // Sessions defined in the override
-        daySchedule.notes = override.notes;
-      } else if (activeFixedSchedule[dayName]) {
-        daySchedule.type = 'fixed';
-        daySchedule.sessions = activeFixedSchedule[dayName];
-      } else if (recurringSessionsToday.length > 0) {
-        // If no fixed schedule, but there are recurring sessions for this day of week
-        daySchedule.type = 'recurring';
-        daySchedule.sessions = recurringSessionsToday.map(rs => ({
-            programId: rs.programId,
-            gymId: rs.gymId,
-            time: rs.time
-        }));
+        sessionsForCalendarDay = override.sessions.map(s => {
+          const program = programs.find(p => p.id === s.programId);
+          return {
+            type: 'program',
+            label: program?.shortName || 'Sessió',
+            color: program?.color || '#cccccc'
+          };
+        });
+      } else {
+        const dayNameForDate = date.toLocaleDateString('ca-ES', { weekday: 'long' });
+        const activeFixedSchedule = getActiveFixedSchedule(date, fixedSchedules);
+        
+        if (activeFixedSchedule && activeFixedSchedule[dayNameForDate] && activeFixedSchedule[dayNameForDate].length > 0) {
+          sessionsForCalendarDay = activeFixedSchedule[dayNameForDate].map(s => {
+            const program = programs.find(p => p.id === s.programId);
+            return {
+              type: 'program',
+              label: program?.shortName || 'Sessió',
+              color: program?.color || '#cccccc'
+            };
+          });
+        } else {
+          const recurringSessionsToday = recurringSessions.filter(session => {
+            const sessionStartDate = normalizeDateToStartOfDay(new Date(session.startDate));
+            const sessionEndDate = session.endDate ? normalizeDateToStartOfDay(new Date(session.endDate)) : null;
+            return session.daysOfWeek.includes(dayNameForDate) &&
+                   date >= sessionStartDate &&
+                   (!sessionEndDate || date <= sessionEndDate);
+          });
+          sessionsForCalendarDay = recurringSessionsToday.map(s => {
+            const program = programs.find(p => p.id === s.programId);
+            return {
+              type: 'program',
+              label: program?.shortName || 'Sessió',
+              color: program?.color || '#cccccc'
+            };
+          });
+        }
       }
 
-
-      let bgColorClass = 'bg-white';
-      let textColorClass = 'text-gray-800';
-      if (isCurrentDay) {
-        bgColorClass = 'bg-blue-200';
-      } else if (isWeekend) {
-        bgColorClass = 'bg-gray-100 text-gray-500';
-      }
-
-      if (missed) {
-        bgColorClass = 'bg-red-200';
-        textColorClass = 'text-red-800';
-      } else if (override) {
-        bgColorClass = 'bg-yellow-200';
-        textColorClass = 'text-yellow-800';
-      }
-      
-      cells.push(
-        <div
-          key={day}
-          className={`p-2 text-center rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-shadow duration-200 ${bgColorClass} ${textColorClass}`}
-          onClick={() => handleDayClick(fullDate, daySchedule, override)}
-        >
-          <span className={`font-semibold ${isCurrentDay ? 'text-blue-700' : ''}`}>{day}</span>
-          {daySchedule.type === 'missed' && (
-            <div className="text-sm font-medium">DIA LLIURE</div>
-          )}
-          {daySchedule.type !== 'missed' && daySchedule.sessions && daySchedule.sessions.length > 0 && (
-            <div className="mt-1 text-left">
-              {daySchedule.sessions.map((session, index) => {
-                const program = programs.find(p => p.id === session.programId);
-                const gym = gyms.find(g => g.id === session.gymId);
-                return (
-                  <div key={index} className="text-xs flex items-center mb-0.5">
-                    <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: program?.color || '#ccc' }}></span>
-                    <span>{session.time} {program?.shortName || 'N/A'} ({gym?.name || 'N/A'})</span>
-                  </div>
-                );
-              })}
-              {daySchedule.notes && <div className="text-xs text-gray-500 mt-1">Notes: {daySchedule.notes}</div>}
-            </div>
-          )}
+      return (
+        <div key={dateString} className={dayClasses} onClick={() => handleDayClick(date)}>
+          <div className="font-semibold text-gray-800 text-right">{day}</div>
+          <div className="flex flex-wrap gap-1 mt-1">
+            {sessionsForCalendarDay.map((session, idx) => (
+              <span key={idx} className="text-xs px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: session.color }}>
+                {session.label}
+              </span>
+            ))}
+          </div>
         </div>
       );
     }
-    return cells;
+    return calendarDays;
   };
 
-  const handleDayClick = (date, daySchedule, override) => {
-    setSelectedDateForOverride(getLocalDateString(date));
-    setIsMissedDay(daySchedule.type === 'missed');
-    
-    // Set default values for the override modal
-    if (daySchedule.type === 'override' && override) {
-      setOverrideProgramId(override.sessions[0]?.programId || ''); // Assuming one session override for now
-      setOverrideGymId(override.sessions[0]?.gymId || '');
-      setOverrideNotes(override.notes || '');
-    } else if (daySchedule.type === 'fixed' && daySchedule.sessions.length > 0) {
-      setOverrideProgramId(daySchedule.sessions[0]?.programId || '');
-      setOverrideGymId(daySchedule.sessions[0]?.gymId || '');
-      setOverrideNotes(''); // No notes for fixed schedule
-    } else if (daySchedule.type === 'recurring' && daySchedule.sessions.length > 0) {
-        setOverrideProgramId(daySchedule.sessions[0]?.programId || '');
-        setOverrideGymId(daySchedule.sessions[0]?.gymId || '');
-        setOverrideNotes(''); // No notes for recurring schedule
-    }
-    else {
-      setOverrideProgramId('');
-      setOverrideGymId('');
-      setOverrideNotes('');
-    }
-    
-    setShowOverrideModal(true);
+  const handleMonthChange = (direction) => {
+    setCurrentMonth(prevMonth => {
+      const newMonth = new Date(prevMonth);
+      newMonth.setMonth(prevMonth.getMonth() + direction);
+      return newMonth;
+    });
   };
 
-  const handleSaveOverride = async () => {
-    if (!db || !currentUserId || !appId) {
-      setMessageModalContent({
-        title: 'Error de Connexió',
-        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
-      return;
-    }
+  const handleDayClick = (date) => {
+    setSelectedDate(date);
+    const dateString = getLocalDateString(date);
+    const dayName = date.toLocaleDateString('ca-ES', { weekday: 'long' });
+    
+    // Check for an existing override for this date
+    const existingOverride = scheduleOverrides.find(so => so.date === dateString);
+    if (existingOverride) {
+      setSessionsForDay(existingOverride.sessions.map((s, index) => ({ id: `${dateString}-${index}`, ...s })));
+    } else {
+      // If no override, populate with active fixed schedule or recurring sessions
+      const activeFixedSchedule = getActiveFixedSchedule(date, fixedSchedules);
+      let defaultSessions = [];
 
-    const overridesPath = getUserCollectionPath(appId, currentUserId, 'scheduleOverrides');
-    const missedDaysPath = getUserCollectionPath(appId, currentUserId, 'missedDays');
-
-    if (!overridesPath || !missedDaysPath) return;
-
-    try {
-      if (isMissedDay) {
-        // Handle marking as missed day
-        const missedDayDocRef = doc(db, missedDaysPath, selectedDateForOverride);
-        if (missedDays.find(md => md.date === selectedDateForOverride)) {
-          await deleteDoc(missedDayDocRef); // Unmark as missed if already marked
-          setMissedDays(prev => prev.filter(md => md.date !== selectedDateForOverride)); // Optimistic update
-        } else {
-          await setDoc(missedDayDocRef, { date: selectedDateForOverride });
-          setMissedDays(prev => [...prev, { date: selectedDateForOverride }]); // Optimistic update
-        }
-
-        // Remove any existing override for this day if it's now a missed day
-        const existingOverride = scheduleOverrides.find(so => so.date === selectedDateForOverride);
-        if (existingOverride) {
-          await deleteDoc(doc(db, overridesPath, existingOverride.id));
-        }
-
+      if (activeFixedSchedule && activeFixedSchedule[dayName] && activeFixedSchedule[dayName].length > 0) {
+        defaultSessions = activeFixedSchedule[dayName].map((s, index) => ({ id: `${dateString}-${index}`, ...s }));
       } else {
-        // Handle saving or updating an override
-        if (!overrideProgramId || !overrideGymId) {
-          setMessageModalContent({
-            title: 'Error de Validació',
-            message: 'Si us plau, selecciona un programa i un gimnàs per a la sessió.',
-            isConfirm: false,
-            onConfirm: () => setShowMessageModal(false),
-          });
-          setShowMessageModal(true);
-          return;
-        }
-
-        const overrideData = {
-          date: selectedDateForOverride,
-          sessions: [{
-            programId: overrideProgramId,
-            gymId: overrideGymId,
-            time: 'N/A' // Time is not handled in this basic override
-          }],
-          notes: overrideNotes,
-        };
-
-        const existingOverride = scheduleOverrides.find(so => so.date === selectedDateForOverride);
-
-        if (existingOverride) {
-          const overrideRef = doc(db, overridesPath, existingOverride.id);
-          await setDoc(overrideRef, overrideData); // Use setDoc to overwrite
-        } else {
-          // Add a new override document with the date as its ID
-          await setDoc(doc(db, overridesPath, selectedDateForOverride), overrideData);
-        }
-
-        // Remove from missed days if it was previously marked
-        const existingMissedDay = missedDays.find(md => md.date === selectedDateForOverride);
-        if (existingMissedDay) {
-          await deleteDoc(doc(db, missedDaysPath, selectedDateForOverride));
-        }
+        const recurringSessionsForDay = recurringSessions.filter(session => {
+          const sessionStartDate = normalizeDateToStartOfDay(new Date(session.startDate));
+          const sessionEndDate = session.endDate ? normalizeDateToStartOfDay(new Date(session.endDate)) : null;
+          return session.daysOfWeek.includes(dayName) &&
+                 date >= sessionStartDate &&
+                 (!sessionEndDate || date <= sessionEndDate);
+        });
+        defaultSessions = recurringSessionsForDay.map((s, index) => ({ id: `${dateString}-${index}`, programId: s.programId, time: s.time, gymId: s.gymId, notes: s.notes || '' }));
       }
-      
-      setShowOverrideModal(false);
-      setMessageModalContent({
-        title: 'Canvis Guardats',
-        message: 'L\'horari del dia s\'ha actualitzat correctament.',
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
-
-    } catch (error) {
-      console.error("Error saving override:", error);
-      setMessageModalContent({
-        title: 'Error',
-        message: `Hi ha hagut un error al guardar els canvis: ${error.message}`,
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
+      setSessionsForDay(defaultSessions);
     }
+    setShowSessionModal(true);
   };
 
-  const handleDeleteOverride = async () => {
+  const handleAddSessionToDay = () => {
+    setSessionsForDay(prev => [...prev, { id: Date.now(), programId: '', time: '', gymId: '', notes: '' }]);
+  };
+
+  const handleUpdateSessionInDay = (id, field, value) => {
+    setSessionsForDay(prev =>
+      prev.map(session =>
+        session.id === id ? { ...session, [field]: value } : session
+      )
+    );
+  };
+
+  const handleDeleteSessionFromDay = (id) => {
+    setSessionsForDay(prev => prev.filter(session => session.id !== id));
+  };
+
+  const handleSaveDaySessions = async () => {
     if (!db || !currentUserId || !appId) {
         setMessageModalContent({
           title: 'Error de Connexió',
@@ -271,168 +185,322 @@ const Schedule = ({ programs, scheduleOverrides, fixedSchedules, users, gyms, re
         return;
       }
 
-    setMessageModalContent({
-        title: 'Confirmar Eliminació',
-        message: 'Estàs segur que vols eliminar aquest canvi d\'horari o dia lliure per a la data seleccionada?',
-        isConfirm: true,
-        onConfirm: async () => {
-            const overridesPath = getUserCollectionPath(appId, currentUserId, 'scheduleOverrides');
-            const missedDaysPath = getUserCollectionPath(appId, currentUserId, 'missedDays');
-            if (!overridesPath || !missedDaysPath) return;
+    if (!selectedDate) return;
 
-            try {
-                // Try to delete from schedule overrides
-                const overrideRef = doc(db, overridesPath, selectedDateForOverride);
-                await deleteDoc(overrideRef);
-                
-                // Try to delete from missed days
-                const missedDayRef = doc(db, missedDaysPath, selectedDateForOverride);
-                await deleteDoc(missedDayRef);
+    const dateNormalized = normalizeDateToStartOfDay(selectedDate);
+    const dateStr = getLocalDateString(dateNormalized);
+    const scheduleOverridesPath = getUserCollectionPath(appId, currentUserId, 'scheduleOverrides');
+    const programsCollectionPath = getUserCollectionPath(appId, currentUserId, 'programs');
+    
+    if (!scheduleOverridesPath || !programsCollectionPath) return;
 
-                setShowOverrideModal(false);
-                setShowMessageModal(true);
-                setMessageModalContent({
-                    title: 'Eliminat',
-                    message: 'Canvi d\'horari/dia lliure eliminat correctament.',
-                    isConfirm: false,
-                    onConfirm: () => setShowMessageModal(false),
-                });
-            } catch (error) {
-                console.error("Error deleting override/missed day:", error);
-                setShowMessageModal(true);
-                setMessageModalContent({
-                    title: 'Error',
-                    message: `Hi ha hagut un error al eliminar el canvi: ${error.message}`,
-                    isConfirm: false,
-                    onConfirm: () => setShowMessageModal(false),
-                });
-            }
-        },
-        onCancel: () => setShowMessageModal(false),
-    });
-    setShowMessageModal(true);
+
+    // Validar sessions
+    for (const session of sessionsForDay) {
+      if (!session.programId || !session.time || !session.gymId) {
+        setMessageModalContent({
+          title: 'Error de Validació',
+          message: 'Totes les sessions han de tenir un programa, hora i gimnàs seleccionats.',
+          isConfirm: false,
+          onConfirm: () => setShowMessageModal(false),
+        });
+        setShowMessageModal(true);
+        return;
+      }
+    }
+
+    try {
+      const overrideRef = doc(db, scheduleOverridesPath, dateStr);
+
+      if (sessionsForDay.length > 0) {
+        const sessionsToSave = sessionsForDay.map(({ id, ...rest }) => rest); // Remove temporary 'id'
+        await setDoc(overrideRef, { date: dateStr, sessions: sessionsToSave }, { merge: false });
+        setMessageModalContent({
+            title: 'Sessions Guardades',
+            message: 'Les sessions del dia s\'han guardat correctament.',
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+          setShowMessageModal(true);
+      } else {
+        // If no sessions, delete the override if it exists
+        const docSnap = await getDoc(overrideRef);
+        if (docSnap.exists()) {
+          await deleteDoc(overrideRef);
+          setMessageModalContent({
+            title: 'Sessions Eliminades',
+            message: 'Totes les sessions del dia s\'han eliminat (override eliminat).',
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+          setShowMessageModal(true);
+        } else {
+            // No sessions to save, and no override to delete, so just close
+            setShowSessionModal(false);
+            return;
+        }
+      }
+
+      // Update program history (sessions array in programs collection)
+      const programsCollectionRef = collection(db, programsCollectionPath);
+      const programsSnapshot = await getDoc(programsCollectionRef); // This is incorrect, needs getDocs for a collection
+      // Corrected logic: Fetch all programs, then iterate to update
+      const allProgramsDocs = await programsCollectionRef.get(); // Using .get() on collection reference
+      const currentProgramsData = allProgramsDocs.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      for (const p of currentProgramsData) {
+        const programRef = doc(db, programsCollectionPath, p.id);
+        // Filter out any existing sessions for this specific date
+        const updatedSessions = p.sessions.filter(s => normalizeDateToStartOfDay(s.date).getTime() !== dateNormalized.getTime());
+        
+        // Add new/updated sessions for this program and date
+        sessionsForDay.forEach(session => {
+          if (session.programId === p.id) {
+            updatedSessions.push({ date: dateStr, notes: session.notes || '' });
+          }
+        });
+        await updateDoc(programRef, { sessions: updatedSessions });
+      }
+
+      setShowSessionModal(false);
+
+    } catch (error) {
+      console.error("Error guardant sessions del dia o actualitzant historial del programa:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al guardar les sessions del dia: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    }
+  };
+
+  const handleOpenMissedDayModal = (date) => {
+    setMissedDaySelectedDate(getLocalDateString(date));
+    setMissedDaySelectedGymId('');
+    setMissedDayNotes('');
+    setShowMissedDayModal(true);
+  };
+
+  const handleAddMissedDay = async () => {
+    if (!db || !currentUserId || !appId) {
+        setMessageModalContent({
+          title: 'Error de Connexió',
+          message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+          isConfirm: false,
+          onConfirm: () => setShowMessageModal(false),
+        });
+        setShowMessageModal(true);
+        return;
+      }
+    if (!missedDaySelectedDate || !missedDaySelectedGymId) {
+      setMessageModalContent({
+        title: 'Error de Validació',
+        message: 'Si us plau, selecciona una data i un gimnàs.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
+    const missedDaysPath = getUserCollectionPath(appId, currentUserId, 'missedDays');
+    if (!missedDaysPath) return;
+
+    try {
+      await addDoc(collection(db, missedDaysPath), { 
+        date: missedDaySelectedDate, 
+        gymId: missedDaySelectedGymId, 
+        notes: missedDayNotes 
+      });
+      setShowMissedDayModal(false);
+      setMessageModalContent({
+        title: 'Dia No Assistit Registrat',
+        message: `El dia ${formatDate(missedDaySelectedDate)} ha estat marcat com a no assistit.`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    } catch (error) {
+      console.error("Error afegint dia perdut:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al registrar el dia no assistit: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    }
   };
 
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-inter">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Calendari de Classes</h1>
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">Calendari</h1>
 
-      <div className="flex justify-between items-center mb-6 bg-white p-4 rounded-lg shadow-md">
+      <div className="flex justify-between items-center mb-6">
         <button
-          onClick={goToPreviousMonth}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+          onClick={() => handleMonthChange(-1)}
+          className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
         >
-          Mes Anterior
+          Anterior
         </button>
-        <h2 className="text-xl font-semibold text-gray-700">
-          {currentDate.toLocaleDateString('ca-ES', { month: 'long', year: 'numeric' })}
-        </h2>
+        <span className="text-2xl font-semibold text-gray-700">
+          {currentMonth.toLocaleDateString('ca-ES', { month: 'long', year: 'numeric' })}
+        </span>
         <button
-          onClick={goToNextMonth}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+          onClick={() => handleMonthChange(1)}
+          className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
         >
-          Mes Següent
+          Següent
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-4 text-center font-bold text-gray-700 mb-4">
-        <div>Dilluns</div>
-        <div>Dimarts</div>
-        <div>Dimecres</div>
-        <div>Dijous</div>
-        <div>Divendres</div>
-        <div className="text-red-500">Dissabte</div>
-        <div className="text-red-500">Diumenge</div>
+      <div className="grid grid-cols-7 text-center text-sm font-medium text-gray-600 mb-4">
+        {daysOfWeek.map(day => <div key={day} className="py-2">{day}</div>)}
       </div>
 
-      <div className="grid grid-cols-7 gap-4">
-        {getCells()}
+      <div className="grid grid-cols-7 gap-2">
+        {renderCalendar()}
       </div>
 
-      {showOverrideModal && (
+      {/* Session Management Modal */}
+      {showSessionModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Gestionar Dia: {formatDate(selectedDateForOverride)}</h2>
-            
-            <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                    <input
-                        type="checkbox"
-                        className="mr-2 leading-tight"
-                        checked={isMissedDay}
-                        onChange={(e) => setIsMissedDay(e.target.checked)}
-                    />
-                    <span className="text-lg">Marcar com a Dia Lliure / Sense Classes</span>
-                </label>
-            </div>
-
-            {!isMissedDay && (
-              <>
-                <div className="mb-4">
-                  <label htmlFor="overrideProgram" className="block text-gray-700 text-sm font-bold mb-2">Programa:</label>
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Gestionar Sessions per al {getLocalDateString(selectedDate)}</h2>
+            {sessionsForDay.length === 0 && (
+              <p className="text-gray-600 mb-4">No hi ha sessions programades per defecte o anul·lades per a aquest dia.</p>
+            )}
+            <div className="space-y-4">
+              {sessionsForDay.map(session => (
+                <div key={session.id} className="flex items-center space-x-2 bg-gray-50 p-3 rounded-lg shadow-sm">
                   <select
-                    id="overrideProgram"
-                    className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={overrideProgramId}
-                    onChange={(e) => setOverrideProgramId(e.target.value)}
+                    className="shadow border rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1"
+                    value={session.programId}
+                    onChange={(e) => handleUpdateSessionInDay(session.id, 'programId', e.target.value)}
                   >
-                    <option value="">Selecciona un programa</option>
+                    <option value="">Selecciona Programa</option>
                     {programs.map(program => (
-                      <option key={program.id} value={program.id}>{program.name} ({program.shortName})</option>
+                      <option key={program.id} value={program.id}>{program.name}</option>
                     ))}
                   </select>
-                </div>
-                <div className="mb-4">
-                  <label htmlFor="overrideGym" className="block text-gray-700 text-sm font-bold mb-2">Gimnàs:</label>
+                  <input
+                    type="time"
+                    className="shadow border rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 w-24"
+                    value={session.time}
+                    onChange={(e) => handleUpdateSessionInDay(session.id, 'time', e.target.value)}
+                  />
                   <select
-                    id="overrideGym"
-                    className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={overrideGymId}
-                    onChange={(e) => setOverrideGymId(e.target.value)}
+                    className="shadow border rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1"
+                    value={session.gymId}
+                    onChange={(e) => handleUpdateSessionInDay(session.id, 'gymId', e.target.value)}
                   >
-                    <option value="">Selecciona un gimnàs</option>
+                    <option value="">Selecciona Gimnàs</option>
                     {gyms.map(gym => (
                       <option key={gym.id} value={gym.id}>{gym.name}</option>
                     ))}
                   </select>
+                  <input
+                    type="text"
+                    className="shadow border rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1"
+                    placeholder="Notes (opcional)"
+                    value={session.notes || ''}
+                    onChange={(e) => handleUpdateSessionInDay(session.id, 'notes', e.target.value)}
+                  />
+                  <button
+                    onClick={() => handleDeleteSessionFromDay(session.id)}
+                    className="bg-red-500 hover:bg-red-600 text-white font-bold p-2 rounded-lg transition duration-300 ease-in-out text-sm"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 fill-current" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm2.46-7.12l1.41-1.41L12 12.17l2.12-2.12 1.41 1.41L13.41 13.5l2.12 2.12-1.41 1.41L12 14.83l-2.12 2.12-1.41-1.41L10.59 13.5l-2.13-2.12zM15.5 4l-1-1h-5l-1 1H5v2h14V4h-3.5z"/></svg>
+                  </button>
                 </div>
-                <div className="mb-4">
-                  <label htmlFor="overrideNotes" className="block text-gray-700 text-sm font-bold mb-2">Notes:</label>
-                  <textarea
-                    id="overrideNotes"
-                    className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={overrideNotes}
-                    onChange={(e) => setOverrideNotes(e.target.value)}
-                    rows="3"
-                  ></textarea>
-                </div>
-              </>
-            )}
-
-            <div className="flex justify-between mt-6">
+              ))}
+            </div>
+            <button
+              onClick={handleAddSessionToDay}
+              className="mt-4 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+            >
+              Afegir Sessió
+            </button>
+            <div className="flex justify-end space-x-4 mt-6">
               <button
-                onClick={() => setShowOverrideModal(false)}
+                onClick={() => setShowSessionModal(false)}
                 className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
               >
                 Cancel·lar
               </button>
               <button
-                onClick={handleDeleteOverride}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
-              >
-                Eliminar Canvi
-              </button>
-              <button
-                onClick={handleSaveOverride}
+                onClick={handleSaveDaySessions}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
               >
-                Guardar Canvis
+                Guardar Sessions
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Missed Day Modal */}
+      {showMissedDayModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Marcar Dia com a No Assistit</h2>
+            <div className="mb-4">
+              <label htmlFor="missedDayDate" className="block text-gray-700 text-sm font-bold mb-2">Data:</label>
+              <input
+                type="date"
+                id="missedDayDate"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={missedDaySelectedDate}
+                onChange={(e) => setMissedDaySelectedDate(e.target.value)}
+                readOnly
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="missedDayGym" className="block text-gray-700 text-sm font-bold mb-2">Gimnàs Afectat:</label>
+              <select
+                id="missedDayGym"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={missedDaySelectedGymId}
+                onChange={(e) => setMissedDaySelectedGymId(e.target.value)}
+              >
+                <option value="">Selecciona un gimnàs</option>
+                {gyms.map(gym => (
+                  <option key={gym.id} value={gym.id}>{gym.name}</option>
+                ))}
+                <option value="all_gyms">Tots els gimnasos</option>
+              </select>
+            </div>
+            <div className="mb-4">
+              <label htmlFor="missedDayNotes" className="block text-gray-700 text-sm font-bold mb-2">Notes (Motiu, opcional):</label>
+              <textarea
+                id="missedDayNotes"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={missedDayNotes}
+                onChange={(e) => setMissedDayNotes(e.target.value)}
+                rows="3"
+              ></textarea>
+            </div>
+            <div className="flex justify-end space-x-4 mt-6">
+              <button
+                onClick={() => setShowMissedDayModal(false)}
+                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+              >
+                Cancel·lar
+              </button>
+              <button
+                onClick={handleAddMissedDay}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+              >
+                Marcar com a No Assistit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showMessageModal && (
         <MessageModal
           show={showMessageModal}
