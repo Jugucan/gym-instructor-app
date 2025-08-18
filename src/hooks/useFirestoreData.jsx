@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, where, doc, getDoc, setDoc, addDoc } from 'firebase/firestore';
-import { getUserCollectionPath, getAppCollectionPath } from '../utils/firebasePaths.jsx'; // Changed .js to .jsx
+import { getUserCollectionPath, getAppCollectionPath } from '../utils/firebasePaths.jsx';
 
 const useFirestoreData = (db, currentUserId, appId, isFirebaseReady, setLoadingMessage, setShowMessageModal, setMessageModalContent) => {
   const [programs, setPrograms] = useState([]);
@@ -19,7 +19,7 @@ const useFirestoreData = (db, currentUserId, appId, isFirebaseReady, setLoadingM
       { id: 'bodycombat', name: 'BodyCombat', shortName: 'BC', color: '#4682B4', releaseDate: '2024-01-01', tracks: [], sessions: [] },
       { id: 'shbam', name: 'Sh\'Bam', shortName: 'SB', color: '#DA70D6', releaseDate: '2024-01-01', tracks: [], sessions: [] },
     ],
-    users: [], // Users will be added by the user
+    users: [],
     gyms: [
       { id: 'sant_hilari', name: 'Sant Hilari', workDays: ['Dilluns', 'Dimecres', 'Divendres'], totalVacationDays: 9, holidaysTaken: [] },
       { id: 'arbucies', name: 'Arbúcies', workDays: ['Dimarts', 'Dijous'], totalVacationDays: 13, holidaysTaken: [] },
@@ -30,9 +30,25 @@ const useFirestoreData = (db, currentUserId, appId, isFirebaseReady, setLoadingM
     missedDays: [],
   };
 
+  // Helper function to populate empty collections with initial data
+  const populateInitialData = async (collectionPath, initialArray) => {
+    try {
+      for (const item of initialArray) {
+        const docRef = item.id ? doc(db, collectionPath, item.id) : null;
+        if (docRef) {
+          await setDoc(docRef, item);
+        } else {
+          await addDoc(collection(db, collectionPath), item);
+        }
+      }
+    } catch (error) {
+      console.error("Error populating initial data:", error);
+    }
+  };
+
   useEffect(() => {
     if (!db || !currentUserId || !isFirebaseReady) {
-      setDataLoaded(false); // Data not ready if Firebase isn't ready or user isn't authenticated
+      setDataLoaded(false);
       return;
     }
 
@@ -40,30 +56,41 @@ const useFirestoreData = (db, currentUserId, appId, isFirebaseReady, setLoadingM
     setDataLoaded(false);
 
     const unsubscribeFunctions = [];
+    let collectionsLoaded = 0;
+    const totalCollections = 7; // programs, users, gyms, fixedSchedules, recurringSessions, scheduleOverrides, missedDays
 
-    // Function to check if a collection exists and populate with initial data if empty
-    const checkAndPopulateCollection = async (collectionName, setData, initialArray) => {
+    const markCollectionLoaded = () => {
+      collectionsLoaded++;
+      if (collectionsLoaded === totalCollections) {
+        setDataLoaded(true);
+        setLoadingMessage('');
+      }
+    };
+
+    // Function to set up collection listener with optional initial data population
+    const setupCollectionListener = (collectionName, setData, initialArray = []) => {
       const path = getUserCollectionPath(appId, currentUserId, collectionName);
-      if (!path) return;
+      if (!path) {
+        markCollectionLoaded();
+        return;
+      }
 
       const q = query(collection(db, path));
-      const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        // First check if collection is empty and needs initialization
         if (snapshot.empty && initialArray.length > 0) {
           setLoadingMessage(`Inicialitzant ${collectionName}...`);
-          for (const item of initialArray) {
-            const docRef = item.id ? doc(db, path, item.id) : null;
-            if (docRef) {
-              await setDoc(docRef, item);
-            } else {
-              // Add doc with auto-generated ID if no ID is specified (e.g., for users)
-              await addDoc(collection(db, path), item);
-            }
-          }
+          // Populate initial data asynchronously but don't await in the callback
+          populateInitialData(path, initialArray).then(() => {
+            // Data will be picked up by the next onSnapshot call
+            markCollectionLoaded();
+          });
         } else {
-          setData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          // Set the data from the snapshot
+          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setData(data);
+          markCollectionLoaded();
         }
-        // Only set dataLoaded to true after ALL initial fetches are attempted
-        // (This might require a more sophisticated loading state management for multiple collections)
       }, (error) => {
         console.error(`Error fetching ${collectionName}:`, error);
         setMessageModalContent({
@@ -73,81 +100,38 @@ const useFirestoreData = (db, currentUserId, appId, isFirebaseReady, setLoadingM
           onConfirm: () => setShowMessageModal(false),
         });
         setShowMessageModal(true);
+        markCollectionLoaded(); // Mark as loaded even on error to prevent hanging
       });
+      
       unsubscribeFunctions.push(unsubscribe);
     };
 
-    // Programs
-    checkAndPopulateCollection('programs', setPrograms, initialData.programs);
+    // Set up all collection listeners
+    setupCollectionListener('programs', setPrograms, initialData.programs);
+    setupCollectionListener('users', setUsers, initialData.users);
+    setupCollectionListener('gyms', setGyms, initialData.gyms);
+    setupCollectionListener('fixedSchedules', setFixedSchedules, initialData.fixedSchedules);
+    setupCollectionListener('recurringSessions', setRecurringSessions, initialData.recurringSessions);
+    setupCollectionListener('scheduleOverrides', setScheduleOverrides, initialData.scheduleOverrides);
+    setupCollectionListener('missedDays', setMissedDays, initialData.missedDays);
 
-    // Users (no initial data, user will add)
-    const usersPath = getUserCollectionPath(appId, currentUserId, 'users');
-    if (usersPath) {
-      const unsubscribeUsers = onSnapshot(collection(db, usersPath), (snapshot) => {
-        setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }, (error) => {
-        console.error("Error fetching users:", error);
-      });
-      unsubscribeFunctions.push(unsubscribeUsers);
-    }
+    // Cleanup function
+    return () => {
+      unsubscribeFunctions.forEach(unsubscribe => unsubscribe());
+    };
+  }, [db, currentUserId, appId, isFirebaseReady]);
 
-    // Gyms
-    checkAndPopulateCollection('gyms', setGyms, initialData.gyms);
-
-    // Fixed Schedules
-    const fixedSchedulesPath = getUserCollectionPath(appId, currentUserId, 'fixedSchedules');
-    if (fixedSchedulesPath) {
-      const unsubscribeFixedSchedules = onSnapshot(collection(db, fixedSchedulesPath), (snapshot) => {
-        setFixedSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }, (error) => {
-        console.error("Error fetching fixed schedules:", error);
-      });
-      unsubscribeFunctions.push(unsubscribeFixedSchedules);
-    }
-
-    // Recurring Sessions
-    const recurringSessionsPath = getUserCollectionPath(appId, currentUserId, 'recurringSessions');
-    if (recurringSessionsPath) {
-      const unsubscribeRecurringSessions = onSnapshot(collection(db, recurringSessionsPath), (snapshot) => {
-        setRecurringSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }, (error) => {
-        console.error("Error fetching recurring sessions:", error);
-      });
-      unsubscribeFunctions.push(unsubscribeRecurringSessions);
-    }
-
-    // Schedule Overrides
-    const scheduleOverridesPath = getUserCollectionPath(appId, currentUserId, 'scheduleOverrides');
-    if (scheduleOverridesPath) {
-      const unsubscribeScheduleOverrides = onSnapshot(collection(db, scheduleOverridesPath), (snapshot) => {
-        setScheduleOverrides(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }, (error) => {
-        console.error("Error fetching schedule overrides:", error);
-      });
-      unsubscribeFunctions.push(unsubscribeScheduleOverrides);
-    }
-
-    // Missed Days
-    const missedDaysPath = getUserCollectionPath(appId, currentUserId, 'missedDays');
-    if (missedDaysPath) {
-      const unsubscribeMissedDays = onSnapshot(collection(db, missedDaysPath), (snapshot) => {
-        setMissedDays(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }, (error) => {
-        console.error("Error fetching missed days:", error);
-      });
-      unsubscribeFunctions.push(unsubscribeMissedDays);
-    }
-
-    // Set dataLoaded to true after all initial snapshot listeners are set up
-    // In a real app, you might want to wait until all initial data is actually loaded.
-    // For simplicity, we assume listeners will populate states soon after.
-    setDataLoaded(true);
-
-
-    return () => unsubscribeFunctions.forEach(unsubscribe => unsubscribe());
-  }, [db, currentUserId, appId, isFirebaseReady]); // Dependencies
-
-  return { programs, users, gyms, fixedSchedules, recurringSessions, scheduleOverrides, missedDays, setMissedDays, dataLoaded };
+  return { 
+    programs, 
+    users, 
+    gyms, 
+    fixedSchedules, 
+    recurringSessions, 
+    scheduleOverrides, 
+    missedDays, 
+    setMissedDays, 
+    dataLoaded 
+  };
 };
 
 export default useFirestoreData;
