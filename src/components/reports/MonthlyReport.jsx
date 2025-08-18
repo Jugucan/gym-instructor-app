@@ -1,4 +1,8 @@
-import React, { useState, useEffect } => {
+import React, { useState, useEffect } from 'react'; // Corrected syntax: removed => { and added from 'react'
+import { getLocalDateString, formatDate } from '../../utils/dateHelpers.jsx';
+import { getActiveFixedSchedule, calculateRecurringSessionMinutes } from '../../utils/scheduleHelpers.jsx';
+
+const MonthlyReport = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleOverrides, missedDays }) => {
   const [reportMonth, setReportMonth] = useState(getLocalDateString(new Date()).substring(0, 7)); // YYYY-MM
   const [reportData, setReportData] = useState([]);
   const [totalWorkingMinutes, setTotalWorkingMinutes] = useState(0);
@@ -86,7 +90,7 @@ import React, { useState, useEffect } => {
 
     setReportData(currentMonthData);
     setTotalWorkingMinutes(calculatedTotalMinutes);
-    setTotalVacationDaysTaken(calculatedTotalVacationDays);
+    setTotalVacationDaysTaken(calculatedTotalVaculatedTotalVacationDays);
   };
 
   return (
