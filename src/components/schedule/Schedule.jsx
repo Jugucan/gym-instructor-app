@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getLocalDateString, normalizeDateToStartOfDay } from '../../utils/dateHelpers.jsx';
+import { getLocalDateString, normalizeDateToStartOfDay, formatDate } from '../../utils/dateHelpers.jsx';
 import { getActiveFixedSchedule } from '../../utils/scheduleHelpers.jsx';
 import { MessageModal } from '../common/MessageModal.jsx';
 import { doc, setDoc, collection, getDoc, updateDoc, addDoc, deleteDoc, getDocs } from 'firebase/firestore';
@@ -20,11 +20,14 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
 
   const daysOfWeek = ['Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte', 'Diumenge'];
 
+  // This useEffect ensures calendar display updates when relevant data changes.
+  // No direct state updates inside that would cause infinite loops.
   useEffect(() => {
-    // This effect runs when fixedSchedules, recurringSessions, or scheduleOverrides change
-    // It ensures the calendar display reflects the latest data
-    // No direct state updates here that would cause infinite loops, just dependencies
-  }, [fixedSchedules, recurringSessions, scheduleOverrides, missedDays, programs, gyms]);
+    // Force re-render of calendar implicitly by changing a state if needed,
+    // or rely on component re-render when props change.
+    // In this case, renderCalendar is called directly in JSX, so it will re-run.
+  }, [fixedSchedules, recurringSessions, scheduleOverrides, missedDays, programs, gyms, currentMonth]);
+
 
   const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year, month) => new Date(year, month, 1).getDay(); // 0 = Sunday, 1 = Monday
@@ -193,6 +196,7 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
     
     if (!scheduleOverridesPath || !programsCollectionPath) return;
 
+
     // Validar sessions
     for (const session of sessionsForDay) {
       if (!session.programId || !session.time || !session.gymId) {
@@ -283,7 +287,7 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
     if (!db || !currentUserId || !appId) {
         setMessageModalContent({
           title: 'Error de Connexió',
-          message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina or contacta amb el suport.',
+          message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
           isConfirm: false,
           onConfirm: () => setShowMessageModal(false),
         });
@@ -313,7 +317,7 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
       setShowMissedDayModal(false);
       setMessageModalContent({
         title: 'Dia No Assistit Registrat',
-        message: `El dia ${missedDaySelectedDate} ha estat marcat com a no assistit.`,
+        message: `El dia ${formatDate(missedDaySelectedDate)} ha estat marcat com a no assistit.`,
         isConfirm: false,
         onConfirm: () => setShowMessageModal(false),
       });
