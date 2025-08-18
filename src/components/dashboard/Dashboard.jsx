@@ -23,10 +23,18 @@ const Dashboard = ({ programs, users, gyms, fixedSchedules, recurringSessions, s
     const dayName = currentDate.toLocaleDateString('ca-ES', { weekday: 'long' });
 
     const override = scheduleOverrides.find(so => so.date === todayString);
+    const missed = missedDays.find(md => md.date === todayString);
+    const isHoliday = gyms.some(gym => gym.holidaysTaken.includes(todayString));
 
-    if (override) {
+    let sessions = [];
+
+    if (missed) {
+      sessions.push({ type: 'missed', label: 'DIA LLIURE', notes: 'Dia marcat com a no assistit' });
+    } else if (isHoliday) {
+      sessions.push({ type: 'holiday', label: 'VACANCES', notes: 'Dia de vacances/tancament del gimnàs' });
+    } else if (override) {
       // Use override schedule
-      const sessions = override.sessions.map(s => {
+      sessions = override.sessions.map(s => {
         const program = programs.find(p => p.id === s.programId);
         const gym = gyms.find(g => g.id === s.gymId);
         return {
@@ -39,20 +47,11 @@ const Dashboard = ({ programs, users, gyms, fixedSchedules, recurringSessions, s
           notes: s.notes || ''
         };
       });
-      setCurrentDaySessions(sessions);
     } else {
       // Use fixed or recurring schedule
       const activeFixedSchedule = getActiveFixedSchedule(currentDate, fixedSchedules);
-      const recurringSessionsToday = recurringSessions.filter(session => {
-        const sessionStartDate = normalizeDateToStartOfDay(new Date(session.startDate));
-        const sessionEndDate = session.endDate ? normalizeDateToStartOfDay(new Date(session.endDate)) : null;
-        return session.daysOfWeek.includes(dayName) &&
-               today >= sessionStartDate &&
-               (!sessionEndDate || today <= sessionEndDate);
-      });
-
-      let sessions = [];
-      if (activeFixedSchedule[dayName] && activeFixedSchedule[dayName].length > 0) {
+      
+      if (activeFixedSchedule && activeFixedSchedule[dayName] && activeFixedSchedule[dayName].length > 0) {
         sessions = activeFixedSchedule[dayName].map(s => {
           const program = programs.find(p => p.id === s.programId);
           const gym = gyms.find(g => g.id === s.gymId);
@@ -66,7 +65,16 @@ const Dashboard = ({ programs, users, gyms, fixedSchedules, recurringSessions, s
             notes: ''
           };
         });
-      } else if (recurringSessionsToday.length > 0) {
+      } else {
+        // Fallback to recurring sessions if no active fixed schedule for the day
+        const recurringSessionsToday = recurringSessions.filter(session => {
+          const sessionStartDate = normalizeDateToStartOfDay(new Date(session.startDate));
+          const sessionEndDate = session.endDate ? normalizeDateToStartOfDay(new Date(session.endDate)) : null;
+          return session.daysOfWeek.includes(dayName) &&
+                 today >= sessionStartDate &&
+                 (!sessionEndDate || today <= sessionEndDate);
+        });
+
         sessions = recurringSessionsToday.map(s => {
           const program = programs.find(p => p.id === s.programId);
           const gym = gyms.find(g => g.id === s.gymId);
@@ -81,8 +89,8 @@ const Dashboard = ({ programs, users, gyms, fixedSchedules, recurringSessions, s
           };
         });
       }
-      setCurrentDaySessions(sessions);
     }
+    setCurrentDaySessions(sessions);
     
     // Calculate programs in rotation
     calculateProgramsInRotation();
@@ -90,7 +98,7 @@ const Dashboard = ({ programs, users, gyms, fixedSchedules, recurringSessions, s
     // Calculate upcoming birthdays
     calculateUpcomingBirthdays();
 
-  }, [currentDate, programs, fixedSchedules, recurringSessions, scheduleOverrides, users, gyms]);
+  }, [currentDate, programs, fixedSchedules, recurringSessions, scheduleOverrides, users, gyms, missedDays]); // Added missedDays to dependencies
 
   const calculateProgramsInRotation = () => {
     const rotationPrograms = [];
@@ -208,7 +216,7 @@ const Dashboard = ({ programs, users, gyms, fixedSchedules, recurringSessions, s
       const override = scheduleOverrides.find(so => so.date === dateString);
 
       if (missed) {
-        sessionsForCalendarDay.push({ type: 'missed', label: 'DIA LLIURE', color: '#EF4444' }); // Red for missed
+        sessionsForCalendarDay.push({ type: 'missed', label: 'LLIURE', color: '#EF4444' }); // Red for missed
       } else if (isHoliday) {
         sessionsForCalendarDay.push({ type: 'holiday', label: 'VACANCES', color: '#60A5FA' }); // Blue for holidays
       } else if (override) {
@@ -225,15 +233,8 @@ const Dashboard = ({ programs, users, gyms, fixedSchedules, recurringSessions, s
         // Check fixed and recurring schedules for the calendar day
         const dayNameForDate = date.toLocaleDateString('ca-ES', { weekday: 'long' });
         const activeFixedSchedule = getActiveFixedSchedule(date, fixedSchedules);
-        const recurringSessionsToday = recurringSessions.filter(session => {
-          const sessionStartDate = normalizeDateToStartOfDay(new Date(session.startDate));
-          const sessionEndDate = session.endDate ? normalizeDateToStartOfDay(new Date(session.endDate)) : null;
-          return session.daysOfWeek.includes(dayNameForDate) &&
-                 date >= sessionStartDate &&
-                 (!sessionEndDate || date <= sessionEndDate);
-        });
-
-        if (activeFixedSchedule[dayNameForDate] && activeFixedSchedule[dayNameForDate].length > 0) {
+        
+        if (activeFixedSchedule && activeFixedSchedule[dayNameForDate] && activeFixedSchedule[dayNameForDate].length > 0) {
           sessionsForCalendarDay = activeFixedSchedule[dayNameForDate].map(s => {
             const program = programs.find(p => p.id === s.programId);
             return {
@@ -242,15 +243,23 @@ const Dashboard = ({ programs, users, gyms, fixedSchedules, recurringSessions, s
               color: program?.color || '#cccccc'
             };
           });
-        } else if (recurringSessionsToday.length > 0) {
-            sessionsForCalendarDay = recurringSessionsToday.map(s => {
-              const program = programs.find(p => p.id === s.programId);
-              return {
-                type: 'program',
-                label: program?.shortName || 'Sessió',
-                color: program?.color || '#cccccc'
-              };
-            });
+        } else {
+          // Fallback to recurring sessions if no active fixed schedule for the day
+          const recurringSessionsToday = recurringSessions.filter(session => {
+            const sessionStartDate = normalizeDateToStartOfDay(new Date(session.startDate));
+            const sessionEndDate = session.endDate ? normalizeDateToStartOfDay(new Date(session.endDate)) : null;
+            return session.daysOfWeek.includes(dayNameForDate) &&
+                   date >= sessionStartDate &&
+                   (!sessionEndDate || date <= sessionEndDate);
+          });
+          sessionsForCalendarDay = recurringSessionsToday.map(s => {
+            const program = programs.find(p => p.id === s.programId);
+            return {
+              type: 'program',
+              label: program?.shortName || 'Sessió',
+              color: program?.color || '#cccccc'
+            };
+          });
         }
       }
 
@@ -294,12 +303,18 @@ const Dashboard = ({ programs, users, gyms, fixedSchedules, recurringSessions, s
           <ul className="space-y-2">
             {currentDaySessions.map((session, index) => (
               <li key={index} className="flex items-center space-x-3">
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: session.programColor }}></span>
-                <p className="text-gray-700">
-                  <span className="font-semibold">{session.time}</span> - {session.programName} ({session.gymName})
-                  {session.type === 'override' && <span className="ml-2 text-sm text-blue-500">(Canvi d'horari)</span>}
-                  {session.notes && <span className="ml-2 text-sm text-gray-500">({session.notes})</span>}
-                </p>
+                {session.type === 'missed' || session.type === 'holiday' ? (
+                  <span className="text-sm px-2 py-1 rounded-full text-white" style={{ backgroundColor: session.color }}>{session.label}</span>
+                ) : (
+                  <>
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: session.programColor }}></span>
+                    <p className="text-gray-700">
+                      <span className="font-semibold">{session.time}</span> - {session.programName} ({session.gymName})
+                      {session.type === 'override' && <span className="ml-2 text-sm text-blue-500">(Canvi d'horari)</span>}
+                      {session.notes && <span className="ml-2 text-sm text-gray-500">({session.notes})</span>}
+                    </p>
+                  </>
+                )}
               </li>
             ))}
           </ul>
