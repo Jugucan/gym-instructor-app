@@ -9,7 +9,7 @@ import Programs from './components/programs/Programs.jsx';
 import ProgramDetail from './components/programs/ProgramDetail.jsx';
 import Schedule from './components/schedule/Schedule.jsx';
 import Users from './components/users/Users.jsx';
-import GymsAndHolidays from './components/gyms_holidays/GymsAndHolidays.jsx';
+import GymsAndHolidays from './components/gyms-holidays/GymsAndHolidays.jsx'; // Corrected: changed _ to -
 import Mixes from './components/mixes/Mixes.jsx';
 import Settings from './components/settings/Settings.jsx';
 import FixedScheduleManagement from './components/schedule/FixedScheduleManagement.jsx';
