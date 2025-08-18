@@ -360,9 +360,9 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
       {/* Programs in Current Rotation */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Programes en Rotació Actual</h2>
-        {programsInRotation.length > 0 ? (
+        {programs.length > 0 ? ( // Changed from programsInRotation to programs to avoid initial empty state if data not loaded
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {programsInRotation.map(program => (
+            {programsInRotation.length > 0 ? programsInRotation.map(program => (
               <div key={program.id} className="p-4 rounded-lg flex items-center shadow-sm" style={{ backgroundColor: program.color + '20', borderLeft: `4px solid ${program.color}` }}>
                 <div className="flex-grow">
                   <p className="text-lg font-medium text-gray-800">{program.name}</p>
@@ -370,19 +370,19 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
                   <p className="text-sm text-gray-600">Última sessió: {formatDate(program.lastUsed)}</p>
                 </div>
               </div>
-            ))}
+            )) : <p className="text-gray-500">Encara no hi ha programes en rotació. Registra algunes sessions!</p>}
           </div>
         ) : (
-          <p className="text-gray-500">Encara no hi ha programes en rotació. Registra algunes sessions!</p>
+          <p className="text-gray-500">Carregant programes...</p> // Changed text for loading state
         )}
       </div>
 
       {/* Upcoming Birthdays */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Aniversaris Pròxims / Recents</h2>
-        {relevantBirthdays.length > 0 ? (
+        {users.length > 0 ? ( // Changed from relevantBirthdays to users
           <ul className="space-y-2">
-            {relevantBirthdays.map(user => {
+            {relevantBirthdays.length > 0 ? relevantBirthdays.map(user => {
               const userBirthday = normalizeDateToStartOfDay(user.birthday);
               const isToday = userBirthday.getMonth() === todayNormalized.getMonth() && userBirthday.getDate() === todayNormalized.getDate();
               
@@ -419,24 +419,28 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
                   </div>
                 </li>
               );
-            })}
+            }) : <p className="text-gray-500">No hi ha aniversaris pròxims o recents aquesta setmana.</p>}
           </ul>
         ) : (
-          <p className="text-gray-500">No hi ha aniversaris pròxims o recents aquesta setmana.</p>
+          <p className="text-gray-500">Carregant usuaris...</p> // Changed text for loading state
         )}
       </div>
 
       {/* Holiday Summary */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Resum de Vacances</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {gymVacationSummary.map(summary => (
-            <div key={summary.name} className="p-4 rounded-lg bg-blue-50 border-l-4 border-blue-400">
-              <p className="text-lg font-medium text-gray-800">{summary.name}</p>
-              <p className="text-sm text-gray-600">Dies restants: <span className="font-semibold text-blue-700">{summary.remaining}</span></p>
-            </div>
-          ))}
-        </div>
+        {gyms.length > 0 ? ( // Changed from gymVacationSummary to gyms
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {gymVacationSummary.length > 0 ? gymVacationSummary.map(summary => (
+              <div key={summary.name} className="p-4 rounded-lg bg-blue-50 border-l-4 border-blue-400">
+                <p className="text-lg font-medium text-gray-800">{summary.name}</p>
+                <p className="text-sm text-gray-600">Dies restants: <span className="font-semibold text-blue-700">{summary.remaining}</span></p>
+              </div>
+            )) : <p className="text-gray-500">No hi ha informació de vacances disponible.</p>}
+          </div>
+        ) : (
+          <p className="text-gray-500">Carregant gimnasos...</p> // Changed text for loading state
+        )}
       </div>
 
       {/* Mini Calendar */}
@@ -448,91 +452,95 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
           ))}
         </div>
         <div className="grid grid-cols-7 gap-2">
-          {calendarDays.map((date, index) => {
-            if (!date) return <div key={index} className="p-2"></div>;
+          {fixedSchedules.length > 0 && recurringSessions.length > 0 && gyms.length > 0 ? (
+            calendarDays.map((date, index) => {
+              if (!date) return <div key={index} className="p-2"></div>;
 
-            const dateNormalized = normalizeDateToStartOfDay(date);
-            const dateStr = getLocalDateString(dateNormalized); // Use getLocalDateString
-            const dayOfWeek = date.getDay(); // 0 for Sunday, 1 for Monday
-            const dayName = daysOfWeekNames[dayOfWeek];
+              const dateNormalized = normalizeDateToStartOfDay(date);
+              const dateStr = getLocalDateString(dateNormalized); // Use getLocalDateString
+              const dayOfWeek = date.getDay(); // 0 for Sunday, 1 for Monday
+              const dayName = daysOfWeekNames[dayOfWeek];
 
-            // Get active fixed schedule for this date
-            const activeFixedSchedule = getActiveFixedSchedule(date, fixedSchedules);
-            const fixedDaySessions = activeFixedSchedule[dayName] || [];
+              // Get active fixed schedule for this date
+              const activeFixedSchedule = getActiveFixedSchedule(dateNormalized, fixedSchedules);
+              const fixedDaySessions = activeFixedSchedule[dayName] || [];
 
-            // Get recurring sessions for this date
-            const recurringSessionsForDay = recurringSessions.filter(rec => {
-              const recStartDateNormalized = normalizeDateToStartOfDay(rec.startDate);
-              const recEndDateNormalized = rec.endDate ? normalizeDateToStartOfDay(rec.endDate) : null;
-              const dateToCheckNormalized = normalizeDateToStartOfDay(date);
+              // Get recurring sessions for this date
+              const recurringSessionsForDay = recurringSessions.filter(rec => {
+                const recStartDateNormalized = normalizeDateToStartOfDay(rec.startDate);
+                const recEndDateNormalized = rec.endDate ? normalizeDateToStartOfDay(rec.endDate) : null;
+                const dateToCheckNormalized = normalizeDateToStartOfDay(date);
 
-              return rec.daysOfWeek.includes(dayName) &&
-                     dateToCheckNormalized >= recStartDateNormalized &&
-                     (!recEndDateNormalized || dateToCheckNormalized <= recEndDateNormalized);
-            });
-
-            // Check for overrides for this specific date
-            const override = scheduleOverrides.find(so => normalizeDateToStartOfDay(so.date).getTime() === dateToCheckNormalized.getTime());
-            let sessionsToDisplay = [];
-            if (override) {
-              sessionsToDisplay = override.sessions;
-            } else {
-              // Combine fixed and recurring, remove duplicates if any (by programId, time, gymId)
-              const combinedSessions = [...fixedDaySessions, ...recurringSessionsForDay];
-              const uniqueSessions = [];
-              const seen = new Set();
-              combinedSessions.forEach(session => {
-                const key = `${session.programId}-${session.time}-${session.gymId}`;
-                if (!seen.has(key)) {
-                  uniqueSessions.push(session);
-                  seen.add(key);
-                }
+                return rec.daysOfWeek.includes(dayName) &&
+                       dateToCheckNormalized >= recStartDateNormalized &&
+                       (!recEndDateNormalized || dateToCheckNormalized <= recEndDateNormalized);
               });
-              sessionsToDisplay = uniqueSessions;
-            }
+
+              // Check for overrides for this specific date
+              const override = scheduleOverrides.find(so => normalizeDateToStartOfDay(so.date).getTime() === dateToCheckNormalized.getTime());
+              let sessionsToDisplay = [];
+              if (override) {
+                sessionsToDisplay = override.sessions;
+              } else {
+                // Combine fixed and recurring, remove duplicates if any (by programId, time, gymId)
+                const combinedSessions = [...fixedDaySessions, ...recurringSessionsForDay];
+                const uniqueSessions = [];
+                const seen = new Set();
+                combinedSessions.forEach(session => {
+                  const key = `${session.programId}-${session.time}-${session.gymId}`;
+                  if (!seen.has(key)) {
+                    uniqueSessions.push(session);
+                    seen.add(key);
+                  }
+                });
+                sessionsToDisplay = uniqueSessions;
+              }
 
 
-            const isHoliday = gyms.some(gym => gym.holidaysTaken.includes(dateStr));
-            const isGymClosure = false; // Not implemented yet
-            const isMissed = missedDays.some(md => normalizeDateToStartOfDay(md.date).getTime() === dateNormalized.getTime());
+              const isHoliday = gyms.some(gym => gym.holidaysTaken.includes(dateStr));
+              const isGymClosure = false; // Not implemented yet
+              const isMissed = missedDays.some(md => normalizeDateToStartOfDay(md.date).getTime() === dateNormalized.getTime());
 
 
-            return (
-              <div
-                key={dateStr}
-                className={`p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[60px]
-                  ${dateStr === getLocalDateString(normalizeDateToStartOfDay(new Date())) ? 'bg-blue-200 border border-blue-500' : 'bg-gray-100'}
-                  ${isHoliday ? 'bg-red-200 border border-red-500' : ''}
-                  ${isGymClosure ? 'bg-purple-200 border border-purple-500' : ''}
-                  ${isMissed ? 'bg-red-100 border border-red-400' : ''}
-                `}
-              >
-                <span className="font-bold">{date.getDate()}</span>
-                {sessionsToDisplay.length > 0 && (
-                  <div className="flex flex-wrap justify-center mt-1">
-                    {sessionsToDisplay.slice(0, 2).map((session, sIdx) => { // Show up to 2 sessions
-                      const program = programs.find(p => p.id === session.programId);
-                      return program ? (
-                        <span key={sIdx} className="text-[9px] font-semibold mx-0.5 px-1 rounded" style={{ backgroundColor: program.color + '30', color: program.color }}>
-                          {program.shortName}
-                        </span>
-                      ) : null;
-                    })}
-                    {sessionsToDisplay.length > 2 && (
-                      <span className="text-[9px] font-semibold mx-0.5 px-1 rounded bg-gray-300 text-gray-700">+{sessionsToDisplay.length - 2}</span>
-                    )}
-                  </div>
-                )}
-                {isHoliday && <span className="text-[10px] text-red-700 mt-1">Vacances</span>}
-                {isGymClosure && <span className="text-[10px] text-purple-700 mt-1">Tancat</span>}
-                {isMissed && (
-                  <span className="absolute top-1 left-1 text-xs text-red-600" title="Dia no assistit">
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
-                  </span>
-                )}
-              </div>
-            );
-          })}
+              return (
+                <div
+                  key={dateStr}
+                  className={`p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[60px]
+                    ${dateStr === getLocalDateString(normalizeDateToStartOfDay(new Date())) ? 'bg-blue-200 border border-blue-500' : 'bg-gray-100'}
+                    ${isHoliday ? 'bg-red-200 border border-red-500' : ''}
+                    ${isGymClosure ? 'bg-purple-200 border border-purple-500' : ''}
+                    ${isMissed ? 'bg-red-100 border border-red-400' : ''}
+                  `}
+                >
+                  <span className="font-bold">{date.getDate()}</span>
+                  {sessionsToDisplay.length > 0 && (
+                    <div className="flex flex-wrap justify-center mt-1">
+                      {sessionsToDisplay.slice(0, 2).map((session, sIdx) => { // Show up to 2 sessions
+                        const program = programs.find(p => p.id === session.programId);
+                        return program ? (
+                          <span key={sIdx} className="text-[9px] font-semibold mx-0.5 px-1 rounded" style={{ backgroundColor: program.color + '30', color: program.color }}>
+                            {program.shortName}
+                          </span>
+                        ) : null;
+                      })}
+                      {sessionsToDisplay.length > 2 && (
+                        <span className="text-[9px] font-semibold mx-0.5 px-1 rounded bg-gray-300 text-gray-700">+{sessionsToDisplay.length - 2}</span>
+                      )}
+                    </div>
+                  )}
+                  {isHoliday && <span className="text-[10px] text-red-700 mt-1">Vacances</span>}
+                  {isGymClosure && <span className="text-[10px] text-purple-700 mt-1">Tancat</span>}
+                  {isMissed && (
+                    <span className="absolute top-1 left-1 text-xs text-red-600" title="Dia no assistit">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
+                    </span>
+                  )}
+                </div>
+              );
+            })
+          ) : (
+            <p className="text-gray-500 col-span-7 text-center">Carregant calendari...</p>
+          )}
         </div>
       </div>
     </div>
@@ -540,7 +548,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
 };
 
 // New component for adding a program via modal
-const AddProgramModal = ({ show, onClose, onSave }) => {
+const AddProgramModal = ({ show, onClose, onSave, db }) => { // Pass db as prop
   const [name, setName] = useState('');
   const [shortName, setShortName] = useState('');
   const [color, setColor] = useState('#60A5FA'); // Default color
@@ -560,7 +568,8 @@ const AddProgramModal = ({ show, onClose, onSave }) => {
       setShowMessageModal(true);
       return;
     }
-    onSave({ name, shortName, color });
+    // Call onSave which now expects 'db' if needed, or handles it internally
+    onSave({ name, shortName, color, db });
     setName('');
     setShortName('');
     setColor('#60A5FA');
@@ -633,15 +642,38 @@ const AddProgramModal = ({ show, onClose, onSave }) => {
 };
 
 
-const Programs = ({ programs, setPrograms, setCurrentPage, setSelectedProgramId }) => {
+const Programs = ({ programs, setPrograms, setCurrentPage, setSelectedProgramId, db, currentUserId, appId }) => { // Pass db, currentUserId, appId
   const [showAddProgramModal, setShowAddProgramModal] = useState(false);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
+  const getUserCollectionPath = (collectionName) => {
+    // Ensure currentUserId and appId are available before building path
+    if (!currentUserId || !appId) {
+      console.error("currentUserId or appId is not available for collection path.");
+      return null;
+    }
+    return `artifacts/${appId}/users/${currentUserId}/${collectionName}`;
+  };
+
   const handleSaveNewProgram = async ({ name, shortName, color }) => {
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
     try {
+      const programsCollectionPath = getUserCollectionPath('programs');
+      if (!programsCollectionPath) return; // Exit if path is invalid
+
       // Add a new document to the 'programs' collection
-      await addDoc(collection(db, 'programs'), {
+      await addDoc(collection(db, programsCollectionPath), {
         name,
         shortName,
         color,
@@ -679,7 +711,7 @@ const Programs = ({ programs, setPrograms, setCurrentPage, setSelectedProgramId 
       </button>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {programs.map(program => (
+        {programs.length > 0 ? programs.map(program => (
           <div
             key={program.id}
             className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition duration-300 ease-in-out flex flex-col justify-between"
@@ -697,13 +729,14 @@ const Programs = ({ programs, setPrograms, setCurrentPage, setSelectedProgramId 
               </span>
             </div>
           </div>
-        ))}
+        )) : <p className="text-gray-500">No hi ha programes definits. Afegeix el primer!</p>}
       </div>
 
       <AddProgramModal
         show={showAddProgramModal}
         onClose={() => setShowAddProgramModal(false)}
         onSave={handleSaveNewProgram}
+        db={db} // Pass db to the modal
       />
       {showMessageModal && (
         <MessageModal
@@ -719,9 +752,17 @@ const Programs = ({ programs, setPrograms, setCurrentPage, setSelectedProgramId 
   );
 };
 
-const ProgramDetail = ({ program, setPrograms, setCurrentPage }) => {
+const ProgramDetail = ({ program, setPrograms, setCurrentPage, db, currentUserId, appId }) => { // Pass db, currentUserId, appId
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
+
+  const getUserCollectionPath = (collectionName) => {
+    if (!currentUserId || !appId) {
+      console.error("currentUserId or appId is not available for collection path.");
+      return null;
+    }
+    return `artifacts/${appId}/users/${currentUserId}/${collectionName}`;
+  };
 
   if (!program) {
     return (
@@ -758,11 +799,24 @@ const ProgramDetail = ({ program, setPrograms, setCurrentPage }) => {
   }
 
   const handleToggleFavorite = async (trackId) => {
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
     try {
       const updatedTracks = program.tracks.map(t =>
         t.id === trackId ? { ...t, isFavorite: !t.isFavorite } : t
       );
-      const programRef = doc(db, 'programs', program.id);
+      const programsCollectionPath = getUserCollectionPath('programs');
+      if (!programsCollectionPath) return;
+
+      const programRef = doc(db, programsCollectionPath, program.id);
       await updateDoc(programRef, { tracks: updatedTracks });
     } catch (error) {
       console.error("Error toggling favorite track:", error);
@@ -858,7 +912,7 @@ const ProgramDetail = ({ program, setPrograms, setCurrentPage }) => {
   );
 };
 
-const Schedule = ({ programs, scheduleOverrides, setScheduleOverrides, fixedSchedules, users, setPrograms, gyms, recurringSessions, missedDays, setMissedDays }) => {
+const Schedule = ({ programs, scheduleOverrides, setScheduleOverrides, fixedSchedules, users, setPrograms, gyms, recurringSessions, missedDays, setMissedDays, db, currentUserId, appId }) => { // Pass db, currentUserId, appId
   const [currentMonth, setCurrentMonth] = useState(new Date()); // Use actual current date for calendar month
   const [selectedDate, setSelectedDate] = useState(null);
   const [showSessionModal, setShowSessionModal] = useState(false);
@@ -873,6 +927,14 @@ const Schedule = ({ programs, scheduleOverrides, setScheduleOverrides, fixedSche
 
   const daysOfWeek = ['Diumenge', 'Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte'];
   const daysOfWeekNames = ['Diumenge', 'Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte'];
+
+  const getUserCollectionPath = (collectionName) => {
+    if (!currentUserId || !appId) {
+      console.error("currentUserId or appId is not available for collection path.");
+      return null;
+    }
+    return `artifacts/${appId}/users/${currentUserId}/${collectionName}`;
+  };
 
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
@@ -965,6 +1027,16 @@ const Schedule = ({ programs, scheduleOverrides, setScheduleOverrides, fixedSche
 
   const handleSaveDaySessions = async () => {
     if (!selectedDate) return;
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
 
     const dateNormalized = normalizeDateToStartOfDay(selectedDate);
     const dateStr = getLocalDateString(dateNormalized);
@@ -984,7 +1056,10 @@ const Schedule = ({ programs, scheduleOverrides, setScheduleOverrides, fixedSche
     }
 
     try {
-      const overrideRef = doc(db, 'scheduleOverrides', dateStr); // Use date as ID for overrides for easy lookup
+      const scheduleOverridesCollectionPath = getUserCollectionPath('scheduleOverrides');
+      if (!scheduleOverridesCollectionPath) return;
+
+      const overrideRef = doc(db, scheduleOverridesCollectionPath, dateStr); // Use date as ID for overrides for easy lookup
 
       if (sessionsForDay.length > 0) {
         const sessionsToSave = sessionsForDay.map(({ id, ...rest }) => rest); // Remove temporary IDs
@@ -998,22 +1073,14 @@ const Schedule = ({ programs, scheduleOverrides, setScheduleOverrides, fixedSche
       }
 
       // Update programs' sessions history in Firestore
-      // Fetch current programs to update their sessions array
-      const programsCollectionRef = collection(db, 'programs');
-      // No use getDocs directly inside onSnapshot context or in loops if data is frequently updated
-      // Use the 'programs' state directly, as it's already updated by onSnapshot
-      
-      // We need to operate on a copy of the current state or re-fetch for this specific update to be safe
-      // Let's refetch programs here to ensure we have the latest data before updating sessions.
-      // This is a common pattern for "transactions" like updates that depend on current state.
-      const programsSnapshot = await getDoc(programRef); // Simplified to one program for demonstration. Needs to fetch all or use a transaction
-      // A full re-fetch for all programs here could be expensive. 
-      // A better approach would be to update *only* the specific program's sessions.
-      // If the `programs` state is reliable (updated by onSnapshot), we can use it.
-      
-      // Assuming programs state is up-to-date due to onSnapshot:
-      for (const p of programs) { // Use the 'programs' state directly
-        const programRef = doc(db, 'programs', p.id);
+      const programsCollectionPath = getUserCollectionPath('programs');
+      if (!programsCollectionPath) return;
+
+      // Create a temporary map for efficient program lookup
+      const programsMap = new Map(programs.map(p => [p.id, p]));
+
+      for (const p of programs) {
+        const programRef = doc(db, programsCollectionPath, p.id);
         const updatedSessions = p.sessions.filter(s => normalizeDateToStartOfDay(s.date).getTime() !== dateNormalized.getTime());
         
         // Add sessions from the current day that belong to this program
@@ -1067,8 +1134,21 @@ const Schedule = ({ programs, scheduleOverrides, setScheduleOverrides, fixedSche
 
   // Handle adding a missed day
   const handleAddMissedDay = async ({ date, gymId, notes }) => {
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
     try {
-      await addDoc(collection(db, 'missedDays'), { date, gymId, notes });
+      const missedDaysCollectionPath = getUserCollectionPath('missedDays');
+      if (!missedDaysCollectionPath) return;
+
+      await addDoc(collection(db, missedDaysCollectionPath), { date, gymId, notes });
       setMessageModalContent({
         title: 'Dia No Assistit Registrat',
         message: `El dia ${formatDate(date)} al gimnàs ${gyms.find(g => g.id === gymId)?.name || 'tots els gimnasos'} ha estat marcat com a no assistit.`,
@@ -1112,104 +1192,108 @@ const Schedule = ({ programs, scheduleOverrides, setScheduleOverrides, fixedSche
           ))}
         </div>
         <div className="grid grid-cols-7 gap-2">
-          {days.map((date, index) => {
-            if (!date) return <div key={index} className="p-2"></div>;
+          {fixedSchedules.length > 0 && recurringSessions.length > 0 && gyms.length > 0 ? ( // Only render if data is likely loaded
+            days.map((date, index) => {
+              if (!date) return <div key={index} className="p-2"></div>;
 
-            const dateNormalized = normalizeDateToStartOfDay(date);
-            const dateStr = getLocalDateString(dateNormalized);
-            const dayOfWeek = dateNormalized.getDay(); // 0 for Sunday, 1 for Monday
-            const dayName = daysOfWeekNames[dayOfWeek];
+              const dateNormalized = normalizeDateToStartOfDay(date);
+              const dateStr = getLocalDateString(dateNormalized);
+              const dayOfWeek = dateNormalized.getDay(); // 0 for Sunday, 1 for Monday
+              const dayName = daysOfWeekNames[dayOfWeek];
 
-            // Get active fixed schedule for this date
-            const activeFixedSchedule = getActiveFixedSchedule(dateNormalized, fixedSchedules);
-            const fixedDaySessions = activeFixedSchedule[dayName] || [];
+              // Get active fixed schedule for this date
+              const activeFixedSchedule = getActiveFixedSchedule(dateNormalized, fixedSchedules);
+              const fixedDaySessions = activeFixedSchedule[dayName] || [];
 
-            // Get recurring sessions for this date
-            const recurringSessionsForDay = recurringSessions.filter(rec => {
-              const recStartDateNormalized = normalizeDateToStartOfDay(rec.startDate);
-              const recEndDateNormalized = rec.endDate ? normalizeDateToStartOfDay(rec.endDate) : null;
-              
-              return rec.daysOfWeek.includes(dayName) &&
-                     dateNormalized >= recStartDateNormalized &&
-                     (!recEndDateNormalized || dateNormalized <= recEndDateNormalized);
-            });
-
-            // Check for overrides for this specific date
-            const override = scheduleOverrides.find(so => normalizeDateToStartOfDay(so.date).getTime() === dateNormalized.getTime());
-            let sessionsToDisplay = [];
-            if (override) {
-              sessionsToDisplay = override.sessions;
-            } else {
-              // Combine fixed and recurring, remove duplicates if any (by programId, time, gymId)
-              const combinedSessions = [...fixedDaySessions, ...recurringSessionsForDay];
-              const uniqueSessions = [];
-              const seen = new Set();
-              combinedSessions.forEach(session => {
-                const key = `${session.programId}-${session.time}-${session.gymId}`;
-                if (!seen.has(key)) {
-                  uniqueSessions.push(session);
-                  seen.add(key);
-                }
+              // Get recurring sessions for this date
+              const recurringSessionsForDay = recurringSessions.filter(rec => {
+                const recStartDateNormalized = normalizeDateToStartOfDay(rec.startDate);
+                const recEndDateNormalized = rec.endDate ? normalizeDateToStartOfDay(rec.endDate) : null;
+                
+                return rec.daysOfWeek.includes(dayName) &&
+                       dateNormalized >= recStartDateNormalized &&
+                       (!recEndDateNormalized || dateNormalized <= recEndDateNormalized);
               });
-              sessionsToDisplay = uniqueSessions;
-            }
 
-            const isToday = dateStr === getLocalDateString(normalizeDateToStartOfDay(new Date()));
-            const isMissed = missedDays.some(md => normalizeDateToStartOfDay(md.date).getTime() === dateNormalized.getTime());
+              // Check for overrides for this specific date
+              const override = scheduleOverrides.find(so => normalizeDateToStartOfDay(so.date).getTime() === dateNormalized.getTime());
+              let sessionsToDisplay = [];
+              if (override) {
+                sessionsToDisplay = override.sessions;
+              } else {
+                // Combine fixed and recurring, remove duplicates if any (by programId, time, gymId)
+                const combinedSessions = [...fixedDaySessions, ...recurringSessionsForDay];
+                const uniqueSessions = [];
+                const seen = new Set();
+                combinedSessions.forEach(session => {
+                  const key = `${session.programId}-${session.time}-${session.gymId}`;
+                  if (!seen.has(key)) {
+                    uniqueSessions.push(session);
+                    seen.add(key);
+                  }
+                });
+                sessionsToDisplay = uniqueSessions;
+              }
+
+              const isToday = dateStr === getLocalDateString(normalizeDateToStartOfDay(new Date()));
+              const isMissed = missedDays.some(md => normalizeDateToStartOfDay(md.date).getTime() === dateNormalized.getTime());
 
 
-            return (
-              <div
-                key={dateStr}
-                className={`p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[80px]
-                  ${isToday ? 'bg-blue-200 border border-blue-500' : 'bg-gray-100'}
-                  ${isMissed ? 'bg-red-100 border border-red-400' : ''}
-                `}
-              >
-                <span className="font-bold">{date.getDate()}</span>
-                {sessionsToDisplay.length > 0 ? (
-                  <div className="flex flex-col items-center mt-1 w-full">
-                    {sessionsToDisplay.map((session, sIdx) => {
-                      const program = programs.find(p => p.id === session.programId);
-                      return program ? (
-                        <span key={sIdx} className="text-[10px] font-semibold mt-0.5 px-1 rounded-md w-full text-center truncate" style={{ backgroundColor: program.color + '30', color: program.color }}>
-                          {program.shortName} ({session.time})
-                        </span>
-                      ) : null;
-                    })}
+              return (
+                <div
+                  key={dateStr}
+                  className={`p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[80px]
+                    ${isToday ? 'bg-blue-200 border border-blue-500' : 'bg-gray-100'}
+                    ${isMissed ? 'bg-red-100 border border-red-400' : ''}
+                  `}
+                >
+                  <span className="font-bold">{date.getDate()}</span>
+                  {sessionsToDisplay.length > 0 ? (
+                    <div className="flex flex-col items-center mt-1 w-full">
+                      {sessionsToDisplay.map((session, sIdx) => {
+                        const program = programs.find(p => p.id === session.programId);
+                        return program ? (
+                          <span key={sIdx} className="text-[10px] font-semibold mt-0.5 px-1 rounded-md w-full text-center truncate" style={{ backgroundColor: program.color + '30', color: program.color }}>
+                            {program.shortName} ({session.time})
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-gray-500 mt-1">Sense sessions</span>
+                  )}
+                  {override && (
+                    <span className="absolute top-1 right-1 text-xs text-blue-600" title="Sessió modificada">
+                      <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    </span>
+                  )}
+                  {isMissed && (
+                    <span className="absolute top-1 left-1 text-xs text-red-600" title="Dia no assistit">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
+                    </span>
+                  )}
+                  <div className="absolute bottom-1 left-0 right-0 flex justify-center space-x-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDayClick(date); }}
+                      className="bg-blue-500 hover:bg-blue-600 text-white p-1 rounded-md text-[8px] leading-none"
+                      title="Gestionar sessions"
+                    >
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zm-6.721 6.721A2 2 0 014 14.172V16h1.828l6.172-6.172-2.828-2.828L6.865 10.307zM2 18h16v2H2v-2z"></path></svg>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setMissedDayDate(date); setShowMissedDayModal(true); }}
+                      className="bg-red-500 hover:bg-red-600 text-white p-1 rounded-md text-[8px] leading-none"
+                      title="Marcar com a dia no assistit"
+                    >
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
+                    </button>
                   </div>
-                ) : (
-                  <span className="text-[10px] text-gray-500 mt-1">Sense sessions</span>
-                )}
-                {override && (
-                  <span className="absolute top-1 right-1 text-xs text-blue-600" title="Sessió modificada">
-                    <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                  </span>
-                )}
-                {isMissed && (
-                  <span className="absolute top-1 left-1 text-xs text-red-600" title="Dia no assistit">
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
-                  </span>
-                )}
-                <div className="absolute bottom-1 left-0 right-0 flex justify-center space-x-1">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDayClick(date); }}
-                    className="bg-blue-500 hover:bg-blue-600 text-white p-1 rounded-md text-[8px] leading-none"
-                    title="Gestionar sessions"
-                  >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zm-6.721 6.721A2 2 0 014 14.172V16h1.828l6.172-6.172-2.828-2.828L6.865 10.307zM2 18h16v2H2v-2z"></path></svg>
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setMissedDayDate(date); setShowMissedDayModal(true); }}
-                    className="bg-red-500 hover:bg-red-600 text-white p-1 rounded-md text-[8px] leading-none"
-                    title="Marcar com a dia no assistit"
-                  >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
-                  </button>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          ) : (
+            <p className="text-gray-500 col-span-7 text-center">Carregant horaris i gimnasos per al calendari...</p>
+          )}
         </div>
       </div>
 
@@ -1315,7 +1399,7 @@ const Schedule = ({ programs, scheduleOverrides, setScheduleOverrides, fixedSche
   );
 };
 
-const Users = ({ users, setUsers, gyms }) => {
+const Users = ({ users, setUsers, gyms, db, currentUserId, appId }) => { // Pass db, currentUserId, appId
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [userName, setUserName] = useState('');
@@ -1331,6 +1415,13 @@ const Users = ({ users, setUsers, gyms }) => {
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
+  const getUserCollectionPath = (collectionName) => {
+    if (!currentUserId || !appId) {
+      console.error("currentUserId or appId is not available for collection path.");
+      return null;
+    }
+    return `artifacts/${appId}/users/${currentUserId}/${collectionName}`;
+  };
 
   const handleAddUser = () => {
     setEditingUser(null);
@@ -1372,6 +1463,17 @@ const Users = ({ users, setUsers, gyms }) => {
       return;
     }
 
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
     const newUser = {
       name: userName,
       birthday: userBirthday,
@@ -1384,11 +1486,14 @@ const Users = ({ users, setUsers, gyms }) => {
     };
 
     try {
+      const usersCollectionPath = getUserCollectionPath('users');
+      if (!usersCollectionPath) return;
+
       if (editingUser) {
-        const userRef = doc(db, 'users', editingUser.id);
+        const userRef = doc(db, usersCollectionPath, editingUser.id);
         await updateDoc(userRef, newUser);
       } else {
-        await addDoc(collection(db, 'users'), newUser);
+        await addDoc(collection(db, usersCollectionPath), newUser);
       }
       setShowUserModal(false);
     } catch (error) {
@@ -1404,13 +1509,26 @@ const Users = ({ users, setUsers, gyms }) => {
   };
 
   const handleDeleteUser = (userId) => {
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
     setMessageModalContent({
       title: 'Confirmar Eliminació',
       message: 'Estàs segur que vols eliminar aquest usuari?',
       isConfirm: true,
       onConfirm: async () => {
         try {
-          await deleteDoc(doc(db, 'users', userId));
+          const usersCollectionPath = getUserCollectionPath('users');
+          if (!usersCollectionPath) return;
+
+          await deleteDoc(doc(db, usersCollectionPath, userId));
           setShowMessageModal(false); // Close confirm modal
           setMessageModalContent({ // Show success alert
             title: 'Eliminat',
@@ -1459,7 +1577,7 @@ const Users = ({ users, setUsers, gyms }) => {
       </button>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {users.map(user => (
+        {users.length > 0 ? users.map(user => (
           <div
             key={user.id}
             className="bg-white rounded-lg shadow-md p-6 flex flex-col justify-between hover:shadow-lg transition duration-300 ease-in-out"
@@ -1500,7 +1618,7 @@ const Users = ({ users, setUsers, gyms }) => {
               </button>
             </div>
           </div>
-        ))}
+        )) : <p className="text-gray-500">No hi ha usuaris definits. Afegeix el primer!</p>}
       </div>
 
       {/* User Modal */}
@@ -1624,7 +1742,7 @@ const Users = ({ users, setUsers, gyms }) => {
   );
 };
 
-const FixedScheduleManagement = ({ fixedSchedules, setFixedSchedules, programs, gyms }) => {
+const FixedScheduleManagement = ({ fixedSchedules, setFixedSchedules, programs, gyms, db, currentUserId, appId }) => { // Pass db, currentUserId, appId
   const [showModal, setShowModal] = useState(false);
   const [editingScheduleEntry, setEditingScheduleEntry] = useState(null);
   const [scheduleStartDate, setScheduleStartDate] = useState('');
@@ -1634,6 +1752,13 @@ const FixedScheduleManagement = ({ fixedSchedules, setFixedSchedules, programs, 
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
+  const getUserCollectionPath = (collectionName) => {
+    if (!currentUserId || !appId) {
+      console.error("currentUserId or appId is not available for collection path.");
+      return null;
+    }
+    return `artifacts/${appId}/users/${currentUserId}/${collectionName}`;
+  };
 
   // Initialize form when editingScheduleEntry changes
   useEffect(() => {
@@ -1674,13 +1799,26 @@ const FixedScheduleManagement = ({ fixedSchedules, setFixedSchedules, programs, 
   };
 
   const handleDeleteSchedule = (id) => {
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
     setMessageModalContent({
       title: 'Confirmar Eliminació',
       message: 'Estàs segur que vols eliminar aquest horari fix?',
       isConfirm: true,
       onConfirm: async () => {
         try {
-          await deleteDoc(doc(db, 'fixedSchedules', id));
+          const fixedSchedulesCollectionPath = getUserCollectionPath('fixedSchedules');
+          if (!fixedSchedulesCollectionPath) return;
+
+          await deleteDoc(doc(db, fixedSchedulesCollectionPath, id));
           setShowMessageModal(false);
           setMessageModalContent({
             title: 'Eliminat',
@@ -1740,6 +1878,17 @@ const FixedScheduleManagement = ({ fixedSchedules, setFixedSchedules, programs, 
       return;
     }
 
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
     // Validate sessions within the schedule
     for (const day of daysOfWeekNames) {
       if (currentEditingSchedule[day]) {
@@ -1764,8 +1913,11 @@ const FixedScheduleManagement = ({ fixedSchedules, setFixedSchedules, programs, 
     };
 
     try {
+      const fixedSchedulesCollectionPath = getUserCollectionPath('fixedSchedules');
+      if (!fixedSchedulesCollectionPath) return;
+
       if (editingScheduleEntry && fixedSchedules.some(s => s.id === editingScheduleEntry.id)) {
-        const scheduleRef = doc(db, 'fixedSchedules', editingScheduleEntry.id);
+        const scheduleRef = doc(db, fixedSchedulesCollectionPath, editingScheduleEntry.id);
         await updateDoc(scheduleRef, newScheduleEntryData);
       } else {
         // Handle new entry or copied entry
@@ -1783,7 +1935,7 @@ const FixedScheduleManagement = ({ fixedSchedules, setFixedSchedules, programs, 
           setShowMessageModal(true);
           return;
         }
-        await addDoc(collection(db, 'fixedSchedules'), newScheduleEntryData);
+        await addDoc(collection(db, fixedSchedulesCollectionPath), newScheduleEntryData);
       }
       setShowModal(false);
       setMessageModalContent({
@@ -1974,7 +2126,7 @@ const FixedScheduleManagement = ({ fixedSchedules, setFixedSchedules, programs, 
 };
 
 
-const GymsAndHolidays = ({ gyms, setGyms }) => {
+const GymsAndHolidays = ({ gyms, setGyms, db, currentUserId, appId }) => { // Pass db, currentUserId, appId
   const [showHolidayModal, setShowHolidayModal] = useState(false);
   const [selectedGymForHoliday, setSelectedGymForHoliday] = useState('');
   const [holidayDate, setHolidayDate] = useState('');
@@ -1983,6 +2135,13 @@ const GymsAndHolidays = ({ gyms, setGyms }) => {
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
+  const getUserCollectionPath = (collectionName) => {
+    if (!currentUserId || !appId) {
+      console.error("currentUserId or appId is not available for collection path.");
+      return null;
+    }
+    return `artifacts/${appId}/users/${currentUserId}/${collectionName}`;
+  };
 
   // Example public holidays for Spain (Catalonia specific might vary)
   // For a real app, this would come from an from an API or a more comprehensive list.
@@ -2015,8 +2174,22 @@ const GymsAndHolidays = ({ gyms, setGyms }) => {
       return;
     }
 
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
     try {
-      const gymRef = doc(db, 'gyms', selectedGymForHoliday);
+      const gymsCollectionPath = getUserCollectionPath('gyms');
+      if (!gymsCollectionPath) return;
+
+      const gymRef = doc(db, gymsCollectionPath, selectedGymForHoliday);
       // Get current holidaysTaken array to append to it
       const gymSnap = await getDoc(gymRef);
       const currentHolidays = gymSnap.exists() ? gymSnap.data().holidaysTaken || [] : [];
@@ -2059,6 +2232,16 @@ const GymsAndHolidays = ({ gyms, setGyms }) => {
   };
 
   const handleSuggestHolidays = async (year) => {
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
     const suggestions = [];
     const daysOfWeek = ['Diumenge', 'Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte'];
 
@@ -2123,12 +2306,15 @@ const GymsAndHolidays = ({ gyms, setGyms }) => {
         isConfirm: true,
         onConfirm: async () => {
           try {
+            const gymsCollectionPath = getUserCollectionPath('gyms');
+            if (!gymsCollectionPath) return;
+
             for (const gym of gyms) {
               const gymSuggestions = suggestions.filter(s => s.gym === gym.name);
               const newHolidays = gymSuggestions.flatMap(s => s.dates);
               
               if (newHolidays.length > 0) {
-                const gymRef = doc(db, 'gyms', gym.id);
+                const gymRef = doc(db, gymsCollectionPath, gym.id);
                 const gymSnap = await getDoc(gymRef);
                 const currentHolidays = gymSnap.exists() ? gymSnap.data().holidaysTaken || [] : [];
                 
@@ -2179,14 +2365,14 @@ const GymsAndHolidays = ({ gyms, setGyms }) => {
       {/* Gym Configuration */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Configuració de Gimnasos</h2>
-        {gyms.map(gym => (
+        {gyms.length > 0 ? gyms.map(gym => (
           <div key={gym.id} className="p-4 rounded-lg bg-blue-50 border-l-4 border-blue-400 mb-4">
             <h3 className="text-lg font-medium text-gray-800">{gym.name}</h3>
             <p className="text-sm text-gray-600">Dies de feina: {gym.workDays.join(', ')}</p>
             <p className="text-sm text-gray-600">Total dies de vacances anuals: {gym.totalVacationDays}</p>
             <p className="text-sm text-gray-600">Dies de vacances restants: <span className="font-semibold text-blue-700">{gym.totalVacationDays - gym.holidaysTaken.length}</span></p>
           </div>
-        ))}
+        )) : <p className="text-gray-500">Carregant configuració de gimnasos...</p>}
       </div>
 
       {/* Register Holidays */}
@@ -2202,7 +2388,7 @@ const GymsAndHolidays = ({ gyms, setGyms }) => {
         {/* Holiday List */}
         <div className="mt-6">
           <h3 className="text-lg font-semibold text-gray-700 mb-3">Dies de Vacances Registrats</h3>
-          {gyms.map(gym => (
+          {gyms.length > 0 ? gyms.map(gym => (
             <div key={gym.id} className="mb-4">
               <h4 className="font-medium text-gray-800">{gym.name}</h4>
               {gym.holidaysTaken.length > 0 ? (
@@ -2215,7 +2401,7 @@ const GymsAndHolidays = ({ gyms, setGyms }) => {
                 <p className="text-gray-500 text-sm">No hi ha dies de vacances registrats per a aquest gimnàs.</p>
               )}
             </div>
-          ))}
+          )) : <p className="text-gray-500">Carregant dies de vacances...</p>}
         </div>
       </div>
 
@@ -2317,19 +2503,23 @@ const Mixes = ({ programs }) => {
 
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Els meus Tracks Preferits</h2>
-        {favoriteTracks.length > 0 ? (
-          <ul className="space-y-3">
-            {favoriteTracks.map(track => (
-              <li key={track.id} className="flex items-center p-3 bg-gray-50 rounded-lg shadow-sm" style={{ borderLeft: `4px solid ${track.programColor}` }}>
-                <div className="flex-grow">
-                  <p className="font-medium text-gray-800">{track.name} <span className="text-sm text-gray-500">({track.type})</span></p>
-                  <p className="text-xs text-gray-600 mt-1">De: {track.programName} ({track.programShortName})</p>
-                </div>
-              </li>
-            ))}
-          </ul>
+        {programs.length > 0 ? ( // Check if programs are loaded
+          favoriteTracks.length > 0 ? (
+            <ul className="space-y-3">
+              {favoriteTracks.map(track => (
+                <li key={track.id} className="flex items-center p-3 bg-gray-50 rounded-lg shadow-sm" style={{ borderLeft: `4px solid ${track.programColor}` }}>
+                  <div className="flex-grow">
+                    <p className="font-medium text-gray-800">{track.name} <span className="text-sm text-gray-500">({track.type})</span></p>
+                    <p className="text-xs text-gray-600 mt-1">De: {track.programName} ({track.programShortName})</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-gray-500">Marca alguns tracks com a favorits a la secció de Programes per veure'ls aquí.</p>
+          )
         ) : (
-          <p className="text-gray-500">Marca alguns tracks com a favorits a la secció de Programes per veure'ls aquí.</p>
+          <p className="text-gray-500">Carregant programes...</p>
         )}
       </div>
 
@@ -2341,7 +2531,7 @@ const Mixes = ({ programs }) => {
   );
 };
 
-const RecurringSessions = ({ recurringSessions, setRecurringSessions, programs, gyms }) => {
+const RecurringSessions = ({ recurringSessions, setRecurringSessions, programs, gyms, db, currentUserId, appId }) => { // Pass db, currentUserId, appId
   const [showModal, setShowModal] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
   const [programId, setProgramId] = useState('');
@@ -2357,6 +2547,14 @@ const RecurringSessions = ({ recurringSessions, setRecurringSessions, programs, 
 
 
   const allDaysOfWeek = ['Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte', 'Diumenge'];
+
+  const getUserCollectionPath = (collectionName) => {
+    if (!currentUserId || !appId) {
+      console.error("currentUserId or appId is not available for collection path.");
+      return null;
+    }
+    return `artifacts/${appId}/users/${currentUserId}/${collectionName}`;
+  };
 
   const handleAddSession = () => {
     setEditingSession(null);
@@ -2394,6 +2592,17 @@ const RecurringSessions = ({ recurringSessions, setRecurringSessions, programs, 
       return;
     }
 
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
     const newSessionData = {
       programId,
       time,
@@ -2405,11 +2614,14 @@ const RecurringSessions = ({ recurringSessions, setRecurringSessions, programs, 
     };
 
     try {
+      const recurringSessionsCollectionPath = getUserCollectionPath('recurringSessions');
+      if (!recurringSessionsCollectionPath) return;
+
       if (editingSession) {
-        const sessionRef = doc(db, 'recurringSessions', editingSession.id);
+        const sessionRef = doc(db, recurringSessionsCollectionPath, editingSession.id);
         await updateDoc(sessionRef, newSessionData);
       } else {
-        await addDoc(collection(db, 'recurringSessions'), newSessionData);
+        await addDoc(collection(db, recurringSessionsCollectionPath), newSessionData);
       }
       setShowModal(false);
     } catch (error) {
@@ -2425,13 +2637,26 @@ const RecurringSessions = ({ recurringSessions, setRecurringSessions, programs, 
   };
 
   const handleDeleteSession = (sessionId) => {
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
     setMessageModalContent({
       title: 'Confirmar Eliminació',
       message: 'Estàs segur que vols eliminar aquesta sessió recurrent?',
       isConfirm: true,
       onConfirm: async () => {
         try {
-          await deleteDoc(doc(db, 'recurringSessions', sessionId));
+          const recurringSessionsCollectionPath = getUserCollectionPath('recurringSessions');
+          if (!recurringSessionsCollectionPath) return;
+
+          await deleteDoc(doc(db, recurringSessionsCollectionPath, sessionId));
           setShowMessageModal(false);
           setMessageModalContent({
             title: 'Eliminat',
@@ -2781,7 +3006,12 @@ const MonthlyReport = ({ programs, gyms, fixedSchedules, recurringSessions, sche
       setLoading(false);
     };
 
-    calculateReport();
+    // Ensure all necessary data for report calculation is loaded
+    if (programs.length > 0 && gyms.length > 0 && fixedSchedules.length > 0 && recurringSessions.length > 0 && scheduleOverrides.length > 0 && missedDays.length > 0) {
+      calculateReport();
+    } else {
+      setLoading(true); // Keep loading if data is not ready
+    }
   }, [reportMonth, programs, gyms, fixedSchedules, recurringSessions, scheduleOverrides, missedDays]);
 
   const goToPreviousMonth = () => {
@@ -2815,14 +3045,14 @@ const MonthlyReport = ({ programs, gyms, fixedSchedules, recurringSessions, sche
           <p className="text-gray-600">Calculant informe...</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Object.values(monthlySummary).map(gymSummary => (
+            {Object.values(monthlySummary).length > 0 ? Object.values(monthlySummary).map(gymSummary => (
               <div key={gymSummary.name} className="p-4 rounded-lg bg-green-50 border-l-4 border-green-400">
                 <h3 className="text-lg font-medium text-gray-800">{gymSummary.name}</h3>
                 <p className="text-sm text-gray-600">Sessions Realitzades: <span className="font-semibold text-green-700">{gymSummary.actualSessions}</span></p>
                 <p className="text-sm text-gray-600">Sessions No Assistides: <span className="font-semibold text-red-700">{gymSummary.missedSessions}</span></p>
                 <p className="text-sm text-gray-600">Sessions Programades: <span className="font-semibold text-gray-700">{gymSummary.expectedSessions}</span></p>
               </div>
-            ))}
+            )) : <p className="text-gray-500">No hi ha dades suficients per generar l'informe.</p>}
           </div>
         )}
       </div>
@@ -2847,11 +3077,6 @@ const MonthlyReport = ({ programs, gyms, fixedSchedules, recurringSessions, sche
 };
 
 
-// Global Firebase instances
-let db;
-let auth;
-let currentUserId; // To store the authenticated user's ID
-
 function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [programs, setPrograms] = useState([]);
@@ -2864,6 +3089,13 @@ function App() {
   const [selectedProgramId, setSelectedProgramId] = useState(null);
   const [isFirebaseReady, setIsFirebaseReady] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Carregant dades...');
+  
+  // Use state for db, auth, and currentUserId
+  const [dbInstance, setDbInstance] = useState(null);
+  const [authInstance, setAuthInstance] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [appId, setAppId] = useState(null); // Store appId from env vars
+
 
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
@@ -2899,8 +3131,8 @@ function App() {
       { id: 'bc95_t5', name: 'Power 2', type: 'Power', isFavorite: false, notes: '' },
       { id: 'bc95_t6', name: 'Combat 3', type: 'Combat', isFavorite: false, notes: '' },
       { id: 'bc95_t7', name: 'Muay Thai', type: 'Muay Thai', isFavorite: false, notes: '' },
-      { id: 'bc95_t8', name: 'Power 3', type: 'Power', isFavorite: false, notes: '' },
-      { id: 'bc95_t9', name: 'Core', type: 'Core', isFavorite: false, notes: '' },
+      { id: 'bc95_t8', type: 'Power 3', isFavorite: false, notes: '' },
+      { id: 'bc95_t9', type: 'Core', isFavorite: false, notes: '' },
       { id: 'bc95_t10', name: 'Cool-down', type: 'Cool-down', isFavorite: false, notes: '' },
     ], sessions: [] },
     { id: 'sb60', name: 'Sh\'Bam 60', shortName: 'SB', color: '#EC4899', releaseDate: '2024-09-15', tracks: [
@@ -2977,10 +3209,12 @@ function App() {
   useEffect(() => {
     const initializeFirebase = async () => {
       try {
-        // Updated to read environment variables from process.env
-        // Netlify injects REACT_APP_ prefixed variables
+        // Log environment variable to console for debugging on Netlify
+        console.log("REACT_APP_FIREBASE_CONFIG:", process.env.REACT_APP_FIREBASE_CONFIG);
+
         const rawFirebaseConfig = process.env.REACT_APP_FIREBASE_CONFIG;
-        const appId = process.env.REACT_APP_APP_ID || 'default-app-id'; // Fallback for appId
+        const envAppId = process.env.REACT_APP_APP_ID || 'default-app-id'; 
+        setAppId(envAppId); // Store appId in state
 
         let firebaseConfig = {};
         if (rawFirebaseConfig) {
@@ -3017,55 +3251,57 @@ function App() {
         }
 
         const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        auth = getAuth(app);
+        const firestoreDb = getFirestore(app); // Assign to local variable first
+        const firebaseAuth = getAuth(app); // Assign to local variable first
+
+        setDbInstance(firestoreDb); // Set db instance in state
+        setAuthInstance(firebaseAuth); // Set auth instance in state
 
         // Sign in anonymously if no custom token is provided (e.g., in Netlify deployments)
-        // Note: __initial_auth_token is typically for Canvas environment,
-        // so for Netlify, anonymous sign-in is the likely default.
-        const initialAuthToken = process.env.REACT_APP_INITIAL_AUTH_TOKEN || null; // Changed to process.env
+        const initialAuthToken = process.env.REACT_APP_INITIAL_AUTH_TOKEN || null;
 
         if (initialAuthToken) {
-          await signInWithCustomToken(auth, initialAuthToken);
+          await signInWithCustomToken(firebaseAuth, initialAuthToken);
         } else {
-          await signInAnonymously(auth);
+          await signInAnonymously(firebaseAuth);
         }
 
-        onAuthStateChanged(auth, async (user) => {
+        onAuthStateChanged(firebaseAuth, async (user) => {
           if (user) {
-            currentUserId = user.uid; // Set the user ID once authenticated
+            setCurrentUserId(user.uid); // Set the user ID once authenticated
             setLoadingMessage('Carregant dades del núvol...');
+            
             // Path for user-specific collections, using the appId from env vars
             const getUserCollectionPath = (collectionName) => {
-              return `artifacts/${appId}/users/${currentUserId}/${collectionName}`;
+              return `artifacts/${envAppId}/users/${user.uid}/${collectionName}`;
             };
 
             // Setup real-time listeners for all collections
-            onSnapshot(collection(db, getUserCollectionPath('programs')), (snapshot) => {
+            onSnapshot(collection(firestoreDb, getUserCollectionPath('programs')), (snapshot) => {
               setPrograms(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             }, (error) => console.error("Error fetching programs:", error));
 
-            onSnapshot(collection(db, getUserCollectionPath('users')), (snapshot) => {
+            onSnapshot(collection(firestoreDb, getUserCollectionPath('users')), (snapshot) => {
               setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             }, (error) => console.error("Error fetching users:", error));
 
-            onSnapshot(collection(db, getUserCollectionPath('gyms')), (snapshot) => {
+            onSnapshot(collection(firestoreDb, getUserCollectionPath('gyms')), (snapshot) => {
               setGyms(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             }, (error) => console.error("Error fetching gyms:", error));
 
-            onSnapshot(collection(db, getUserCollectionPath('fixedSchedules')), (snapshot) => {
+            onSnapshot(collection(firestoreDb, getUserCollectionPath('fixedSchedules')), (snapshot) => {
               setFixedSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => a.startDate.localeCompare(b.startDate)));
             }, (error) => console.error("Error fetching fixed schedules:", error));
 
-            onSnapshot(collection(db, getUserCollectionPath('recurringSessions')), (snapshot) => {
+            onSnapshot(collection(firestoreDb, getUserCollectionPath('recurringSessions')), (snapshot) => {
               setRecurringSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             }, (error) => console.error("Error fetching recurring sessions:", error));
 
-            onSnapshot(collection(db, getUserCollectionPath('scheduleOverrides')), (snapshot) => {
+            onSnapshot(collection(firestoreDb, getUserCollectionPath('scheduleOverrides')), (snapshot) => {
               setScheduleOverrides(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             }, (error) => console.error("Error fetching schedule overrides:", error));
 
-            onSnapshot(collection(db, getUserCollectionPath('missedDays')), (snapshot) => {
+            onSnapshot(collection(firestoreDb, getUserCollectionPath('missedDays')), (snapshot) => {
               setMissedDays(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             }, (error) => console.error("Error fetching missed days:", error));
 
@@ -3074,37 +3310,35 @@ function App() {
 
             // Initial data seeding if collections are empty (first run)
             const checkAndSeedData = async () => {
-              const programsCollection = collection(db, getUserCollectionPath('programs'));
-              const programsSnap = await getDoc(programsCollection); // Use getDoc to check existence of a specific document or getDocs for collection
+              const programsCollectionRef = collection(firestoreDb, getUserCollectionPath('programs'));
+              const programsSnap = await getDocs(programsCollectionRef); // Use getDocs for a collection check
 
-              // To check if a collection is empty, you usually need to fetch documents
-              const programsCount = (await programsSnap.get()).size; // Or programsSnap.empty
-              if (programsCount === 0) { // Check if programs collection is empty
+              if (programsSnap.empty) { // Check if programs collection is empty
                 setLoadingMessage('Inicialitzant dades per primera vegada...');
                 try {
                   // Seed initialPrograms
                   for (const p of initialPrograms) {
-                    await setDoc(doc(db, getUserCollectionPath('programs'), p.id), p);
+                    await setDoc(doc(firestoreDb, getUserCollectionPath('programs'), p.id), p);
                   }
                   // Seed initialUsers
                   for (const u of initialUsers) {
-                    await setDoc(doc(db, getUserCollectionPath('users'), u.id), u);
+                    await setDoc(doc(firestoreDb, getUserCollectionPath('users'), u.id), u);
                   }
                   // Seed initialGyms
                   for (const g of initialGyms) {
-                    await setDoc(doc(db, getUserCollectionPath('gyms'), g.id), g);
+                    await setDoc(doc(firestoreDb, getUserCollectionPath('gyms'), g.id), g);
                   }
                   // Seed initialFixedSchedules
                   for (const fs of initialFixedSchedules) {
-                    await setDoc(doc(db, getUserCollectionPath('fixedSchedules'), fs.id), fs);
+                    await setDoc(doc(firestoreDb, getUserCollectionPath('fixedSchedules'), fs.id), fs);
                   }
                   // Seed initialRecurringSessions
                   for (const rs of initialRecurringSessions) {
-                    await setDoc(doc(db, getUserCollectionPath('recurringSessions'), rs.id), rs);
+                    await setDoc(doc(firestoreDb, getUserCollectionPath('recurringSessions'), rs.id), rs);
                   }
                   // Seed initialMissedDays
                   for (const md of initialMissedDays) {
-                    await setDoc(doc(db, getUserCollectionPath('missedDays'), md.id), md); // Use predefined ID
+                    await setDoc(doc(firestoreDb, getUserCollectionPath('missedDays'), md.id), md); // Use predefined ID
                   }
                   setLoadingMessage('Dades inicials creades!');
                 } catch (seedError) {
@@ -3151,24 +3385,24 @@ function App() {
       case 'dashboard':
         return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} />;
       case 'programs':
-        return <Programs programs={programs} setPrograms={setPrograms} setCurrentPage={setCurrentPage} setSelectedProgramId={setSelectedProgramId} />;
+        return <Programs programs={programs} setPrograms={setPrograms} setCurrentPage={setCurrentPage} setSelectedProgramId={setSelectedProgramId} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
       case 'programDetail':
         const program = programs.find(p => p.id === selectedProgramId);
-        return <ProgramDetail program={program} setPrograms={setPrograms} setCurrentPage={setCurrentPage} />;
+        return <ProgramDetail program={program} setPrograms={setPrograms} setCurrentPage={setCurrentPage} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
       case 'schedule':
-        return <Schedule programs={programs} scheduleOverrides={scheduleOverrides} setScheduleOverrides={setScheduleOverrides} fixedSchedules={fixedSchedules} users={users} setPrograms={setPrograms} gyms={gyms} recurringSessions={recurringSessions} missedDays={missedDays} setMissedDays={setMissedDays} />;
+        return <Schedule programs={programs} scheduleOverrides={scheduleOverrides} setScheduleOverrides={setScheduleOverrides} fixedSchedules={fixedSchedules} users={users} setPrograms={setPrograms} gyms={gyms} recurringSessions={recurringSessions} missedDays={missedDays} setMissedDays={setMissedDays} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
       case 'users':
-        return <Users users={users} setUsers={setUsers} gyms={gyms} />;
+        return <Users users={users} setUsers={setUsers} gyms={gyms} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
       case 'gymsAndHolidays':
-        return <GymsAndHolidays gyms={gyms} setGyms={setGyms} />;
+        return <GymsAndHolidays gyms={gyms} setGyms={setGyms} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
       case 'mixes':
         return <Mixes programs={programs} />;
       case 'settings':
         return <Settings setCurrentPage={setCurrentPage} />;
       case 'fixedScheduleManagement':
-        return <FixedScheduleManagement fixedSchedules={fixedSchedules} setFixedSchedules={setFixedSchedules} programs={programs} gyms={gyms} />;
+        return <FixedScheduleManagement fixedSchedules={fixedSchedules} setFixedSchedules={setFixedSchedules} programs={programs} gyms={gyms} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
       case 'recurringSessions':
-        return <RecurringSessions recurringSessions={recurringSessions} setRecurringSessions={setRecurringSessions} programs={programs} gyms={gyms} />;
+        return <RecurringSessions recurringSessions={recurringSessions} setRecurringSessions={setRecurringSessions} programs={programs} gyms={gyms} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
       case 'monthlyReport':
         return <MonthlyReport programs={programs} gyms={gyms} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} scheduleOverrides={scheduleOverrides} missedDays={missedDays} />;
       default:
