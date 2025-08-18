@@ -17,8 +17,8 @@ import RecurringSessions from './components/schedule/RecurringSessions.jsx';
 import MonthlyReport from './components/reports/MonthlyReport.jsx';
 import Auth from './components/auth/Auth.jsx'; // New Auth component
 
-// Importa els helpers i hooks
-import useFirestoreData from './hooks/useFirestoreData.js';
+// Importa els helpers i hooks (ara amb .jsx)
+import useFirestoreData from './hooks/useFirestoreData.jsx'; // Changed .js to .jsx
 import { MessageModal } from './components/common/MessageModal.jsx';
 
 
