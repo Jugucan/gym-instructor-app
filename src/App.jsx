@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 // Importa les funcions de Firebase
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc, collection, query, onSnapshot, updateDoc, deleteDoc, addDoc, getDocs } from 'firebase/firestore'; // Added getDocs
+import { getFirestore, doc, getDoc, setDoc, collection, query, onSnapshot, updateDoc, deleteDoc, addDoc, getDocs, where } from 'firebase/firestore'; // Added where
 
 // Helper to format dates
 const formatDate = (dateString) => {
@@ -167,34 +167,255 @@ const MissedDayModal = ({ show, onClose, onSave, date, gyms }) => {
 };
 
 
-const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays }) => {
+const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, db, currentUserId, appId, setMissedDays }) => {
   const today = new Date(); // Use actual current date
   const todayNormalized = normalizeDateToStartOfDay(today);
   const todayStr = getLocalDateString(todayNormalized); // Use getLocalDateString for consistent string format
   const daysOfWeekNames = ['Diumenge', 'Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte'];
 
+  // State for calendar interactions within Dashboard (MOVED HERE)
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [sessionsForDay, setSessionsForDay] = useState([]); // Sessions for the selected date
+  const [showMissedDayModal, setShowMissedDayModal] = useState(false);
+  const [missedDayDate, setMissedDayDate] = useState(null);
+
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
+
+  const getUserCollectionPath = (collectionName) => {
+    if (!currentUserId || !appId) {
+      console.error("currentUserId or appId is not available for collection path.");
+      return null;
+    }
+    return `artifacts/${appId}/users/${currentUserId}/${collectionName}`;
+  };
+
+  // Helper to get sessions for a specific date (combining fixed, recurring, and overrides)
+  const getSessionsForDate = (date) => {
+    const dateNormalized = normalizeDateToStartOfDay(date);
+    const dayOfWeek = dateNormalized.getDay();
+    const dayName = daysOfWeekNames[dayOfWeek];
+
+    const activeFixedSchedule = getActiveFixedSchedule(dateNormalized, fixedSchedules);
+    const fixedDaySessions = activeFixedSchedule[dayName] || [];
+
+    const recurringSessionsForDay = recurringSessions.filter(rec => {
+      const recStartDateNormalized = normalizeDateToStartOfDay(rec.startDate);
+      const recEndDateNormalized = rec.endDate ? normalizeDateToStartOfDay(rec.endDate) : null;
+      return rec.daysOfWeek.includes(dayName) &&
+             dateNormalized >= recStartDateNormalized &&
+             (!recEndDateNormalized || dateNormalized <= recEndDateNormalized);
+    });
+
+    const override = scheduleOverrides.find(so => normalizeDateToStartOfDay(so.date).getTime() === dateNormalized.getTime());
+
+    if (override) {
+      // Ensure sessions have a temporary ID for keying in React if they don't from Firestore
+      return override.sessions.map(s => ({ ...s, id: s.id || `override_${Date.now()}_${Math.random()}`, isOverride: true }));
+    } else {
+      const combinedSessions = [...fixedDaySessions, ...recurringSessionsForDay];
+      const uniqueSessions = [];
+      const seen = new Set();
+      combinedSessions.forEach(session => {
+        const key = `${session.programId}-${session.time}-${session.gymId}`;
+        if (!seen.has(key)) {
+          // Ensure session has an ID for keying in React if it doesn't from Firestore
+          uniqueSessions.push({ ...session, id: session.id || `fixed_rec_${Date.now()}_${Math.random()}` });
+          seen.add(key);
+        }
+      });
+      return uniqueSessions.map(s => ({ ...s, isFixedOrRecurring: true })); // Mark type
+    }
+  };
+
+  const handleDayClick = (date) => {
+    setSelectedDate(date);
+    const sessions = getSessionsForDate(date);
+    setSessionsForDay(sessions);
+    setShowSessionModal(true);
+  };
+
+  const handleAddSessionToDay = () => {
+    setSessionsForDay(prev => [...prev, { id: `temp_${Date.now()}_${Math.random()}`, programId: '', time: '', gymId: '', notes: '', isNew: true }]);
+  };
+
+  const handleUpdateSessionInDay = (sessionId, field, value) => {
+    setSessionsForDay(prev =>
+      prev.map(session =>
+        session.id === sessionId ? { ...session, [field]: value } : session
+      )
+    );
+  };
+
+  const handleDeleteSessionInDay = (sessionId) => {
+    setSessionsForDay(prev => prev.filter(session => session.id !== sessionId));
+  };
+
+  const handleSaveDaySessions = async () => {
+    if (!selectedDate || !db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
+    // Validate sessions
+    for (const session of sessionsForDay) {
+      if (!session.programId || !session.time || !session.gymId) {
+        setMessageModalContent({
+          title: 'Error de Validació',
+          message: 'Si us plau, assegura\'t que totes les sessions tenen un programa, hora i gimnàs seleccionats.',
+          isConfirm: false,
+          onConfirm: () => setShowMessageModal(false),
+        });
+        setShowMessageModal(true);
+        return;
+      }
+    }
+
+    const dateToSave = getLocalDateString(selectedDate);
+    const scheduleOverridesCollectionPath = getUserCollectionPath('scheduleOverrides');
+    if (!scheduleOverridesCollectionPath) return;
+
+    try {
+      const existingOverrideQuery = query(
+        collection(db, scheduleOverridesCollectionPath),
+        where('date', '==', dateToSave)
+      );
+      const querySnapshot = await getDocs(existingOverrideQuery);
+
+      if (!querySnapshot.empty) {
+        // Update existing override
+        const overrideDoc = querySnapshot.docs[0];
+        await updateDoc(doc(db, scheduleOverridesCollectionPath, overrideDoc.id), {
+          sessions: sessionsForDay.map(({ id, isNew, isOverride, isFixedOrRecurring, ...rest }) => rest), // Remove temp IDs and flags
+        });
+      } else {
+        // Add new override
+        await addDoc(collection(db, scheduleOverridesCollectionPath), {
+          date: dateToSave,
+          sessions: sessionsForDay.map(({ id, isNew, isOverride, isFixedOrRecurring, ...rest }) => rest), // Remove temp IDs and flags
+        });
+      }
+      setShowSessionModal(false);
+      setMessageModalContent({
+        title: 'Sessions Guardades',
+        message: 'Les sessions per a aquest dia s\'han guardat correctament!',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    } catch (error) {
+      console.error("Error saving day sessions:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al guardar les sessions: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    }
+  };
+
+  const handleAddMissedDay = async ({ date, gymId, notes }) => {
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+    try {
+      const missedDaysCollectionPath = getUserCollectionPath('missedDays');
+      if (!missedDaysCollectionPath) return;
+
+      const newMissedDay = { date, gymId, notes };
+
+      // Check if this date and gymId combo already exists to prevent duplicates
+      const existingMissedDayQuery = query(
+        collection(db, missedDaysCollectionPath),
+        where('date', '==', date),
+        where('gymId', '==', gymId)
+      );
+      const querySnapshot = await getDocs(existingMissedDayQuery);
+
+      if (!querySnapshot.empty) {
+        setMessageModalContent({
+          title: 'Error',
+          message: 'Aquest dia ja està marcat com a no assistit per a aquest gimnàs (o tots els gimnasos si és el cas).',
+          isConfirm: false,
+          onConfirm: () => setShowMessageModal(false),
+        });
+        setShowMessageModal(true);
+        return;
+      }
+
+      await addDoc(collection(db, missedDaysCollectionPath), newMissedDay);
+      setShowMissedDayModal(false);
+      setMessageModalContent({
+        title: 'Dia No Assistit Registrat',
+        message: `El dia ${formatDate(date)} s'ha marcat com a no assistit correctament.`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    } catch (error) {
+      console.error("Error adding missed day:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al marcar el dia com a no assistit: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    }
+  };
+
+
   // Calculate programs in current rotation
   const programsInRotation = programs.map(program => {
-    const sortedSessions = [...program.sessions].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-    if (!sortedSessions) return null; // Check if sortedSessions is not empty
+    const relevantSessions = scheduleOverrides.filter(so => so.sessions.some(s => s.programId === program.id))
+                              .flatMap(so => so.sessions.map(s => ({ date: so.date, programId: s.programId })))
+                              .concat(
+                                fixedSchedules.flatMap(fs => 
+                                  Object.values(fs.schedule).flat().map(s => ({ date: fs.startDate, programId: s.programId })) // Using fixed schedule start date as a proxy
+                                )
+                              )
+                              .concat(
+                                recurringSessions.flatMap(rs => 
+                                  [{ date: rs.startDate, programId: rs.programId }] // Using recurring session start date as a proxy
+                                )
+                              )
+                              .filter(s => s.programId === program.id);
 
-    let lastSessionDate = new Date(sortedSessions.date);
-    let startDate = lastSessionDate;
+    if (relevantSessions.length === 0) return null;
+
+    const sortedSessions = [...relevantSessions].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const lastSessionDate = new Date(sortedSessions[0].date);
 
     // Find the start of the continuous usage period
-    for (let i = 1; i < program.sessions.length; i++) { // Iterate through all sessions, not just sorted ones
-      const currentSessionDate = new Date(program.sessions[i].date);
-      const diffDays = Math.floor((lastSessionDate - currentSessionDate) / (1000 * 60 * 60 * 24));
-      // Assuming "continuous" means no more than 7 days gap between sessions of the same program
-      if (diffDays > 7) {
-        break;
-      }
-      startDate = currentSessionDate;
-      lastSessionDate = currentSessionDate;
+    let startDate = lastSessionDate;
+    for (let i = 0; i < sortedSessions.length - 1; i++) {
+        const currentSessDate = new Date(sortedSessions[i].date);
+        const nextSessDate = new Date(sortedSessions[i+1].date);
+        const diffDays = Math.floor((currentSessDate - nextSessDate) / (1000 * 60 * 60 * 24));
+        if (diffDays > 7) { // Assuming "continuous" means no more than 7 days gap
+            break;
+        }
+        startDate = nextSessDate;
     }
+
     return {
       ...program,
-      lastUsed: sortedSessions.date,
+      lastUsed: sortedSessions[0].date,
       currentRotationStartDate: startDate.toISOString().split('T')[0],
     };
   }).filter(Boolean).sort((a, b) => new Date(b.lastUsed) - new Date(a.lastUsed));
@@ -293,43 +514,6 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
   });
 
 
-  // Determine actual sessions for today
-  const currentDayName = daysOfWeekNames[todayNormalized.getDay()];
-  const activeFixedScheduleToday = getActiveFixedSchedule(todayNormalized, fixedSchedules);
-  const fixedSessionsToday = activeFixedScheduleToday[currentDayName] || [];
-
-  const recurringSessionsToday = recurringSessions.filter(rec => {
-    const recStartDateNormalized = normalizeDateToStartOfDay(rec.startDate);
-    const recEndDateNormalized = rec.endDate ? normalizeDateToStartOfDay(rec.endDate) : null;
-    
-    return rec.daysOfWeek.includes(currentDayName) &&
-           todayNormalized >= recStartDateNormalized &&
-           (!recEndDateNormalized || todayNormalized <= recEndDateNormalized);
-  });
-
-  const overrideToday = scheduleOverrides.find(so => normalizeDateToStartOfDay(so.date).getTime() === todayNormalized.getTime());
-  const actualSessionsToday = overrideToday ? overrideToday.sessions : [...fixedSessionsToday, ...recurringSessionsToday];
-
-
-  const isBirthdayRelevantToday = (user) => {
-    const userBirthday = normalizeDateToStartOfDay(user.birthday);
-    const isTodayBirthday = userBirthday.getMonth() === todayNormalized.getMonth() && userBirthday.getDate() === todayNormalized.getDate();
-
-    if (!isTodayBirthday) return false;
-
-    // Check if user's gym has a session today and if user usually attends that program
-    const userGym = gyms.find(g => g.id === user.gymId);
-    if (!userGym) return false;
-
-    return actualSessionsToday.some(session => {
-      const program = programs.find(p => p.id === session.programId);
-      // Check if the session's gym matches the user's gym
-      // And if the user's usual sessions include the short name of the program
-      return session.gymId === user.gymId && user.usualSessions.some(us => us === program?.shortName);
-    });
-  };
-
-
   // Holiday summary
   const gymVacationSummary = gyms.map(gym => ({
     name: gym.name,
@@ -343,7 +527,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
   const firstDayOfMonth = new Date(currentYear, currentMonth.getMonth(), 1).getDay(); // 0 for Sunday, 1 for Monday
 
   const calendarDays = [];
-  for (let i = 0; i < firstDayOfMonth - 1; i++) { // Adjust for Monday start
+  for (let i = 0; i < (firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1); i++) { // Adjust for Monday start (0=Sunday, 1=Monday -> so if Sunday, need 6 blanks, if Monday 0, if Tue 1, etc.)
     calendarDays.push(null);
   }
   for (let i = 1; i <= daysInMonth; i++) {
@@ -458,43 +642,8 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
 
               const dateNormalized = normalizeDateToStartOfDay(date);
               const dateStr = getLocalDateString(dateNormalized); // Use getLocalDateString
-              const dayOfWeek = date.getDay(); // 0 for Sunday, 1 for Monday
-              const dayName = daysOfWeekNames[dayOfWeek];
-
-              // Get active fixed schedule for this date
-              const activeFixedSchedule = getActiveFixedSchedule(dateNormalized, fixedSchedules);
-              const fixedDaySessions = activeFixedSchedule[dayName] || [];
-
-              // Get recurring sessions for this date
-              const recurringSessionsForDay = recurringSessions.filter(rec => {
-                const recStartDateNormalized = normalizeDateToStartOfDay(rec.startDate);
-                const recEndDateNormalized = rec.endDate ? normalizeDateToStartOfDay(rec.endDate) : null;
-                const dateToCheckNormalized = normalizeDateToStartOfDay(date);
-
-                return rec.daysOfWeek.includes(dayName) &&
-                       dateToCheckNormalized >= recStartDateNormalized &&
-                       (!recEndDateNormalized || dateToCheckNormalized <= recEndDateNormalized);
-              });
-
-              // Check for overrides for this specific date
-              const override = scheduleOverrides.find(so => normalizeDateToStartOfDay(so.date).getTime() === dateToCheckNormalized.getTime());
-              let sessionsToDisplay = [];
-              if (override) {
-                sessionsToDisplay = override.sessions;
-              } else {
-                // Combine fixed and recurring, remove duplicates if any (by programId, time, gymId)
-                const combinedSessions = [...fixedDaySessions, ...recurringSessionsForDay];
-                const uniqueSessions = [];
-                const seen = new Set();
-                combinedSessions.forEach(session => {
-                  const key = `${session.programId}-${session.time}-${session.gymId}`;
-                  if (!seen.has(key)) {
-                    uniqueSessions.push(session);
-                    seen.add(key);
-                  }
-                });
-                sessionsToDisplay = uniqueSessions;
-              }
+              
+              const sessionsToDisplay = getSessionsForDate(date); // Use the helper function here
 
 
               const isHoliday = gyms.some(gym => gym.holidaysTaken.includes(dateStr));
@@ -568,7 +717,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
 
             <div className="space-y-4 mb-4 max-h-60 overflow-y-auto pr-2">
               {sessionsForDay.length === 0 && <p className="text-gray-500">No hi ha sessions per a aquest dia. Afegeix-ne una!</p>}
-              {sessionsForDay.map((session) => ( // Removed index, rely on session.id
+              {sessionsForDay.map((session) => (
                 <div key={session.id} className="flex items-center space-x-2 bg-gray-50 p-3 rounded-lg shadow-sm">
                   <div className="flex-grow grid grid-cols-3 gap-2">
                     <select
@@ -661,6 +810,559 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
     </div>
   );
 };
+
+const Programs = ({ programs, setPrograms, setCurrentPage, setSelectedProgramId, db, currentUserId, appId }) => {
+  const [showProgramModal, setShowProgramModal] = useState(false);
+  const [editingProgram, setEditingProgram] = useState(null);
+  const [programName, setProgramName] = useState('');
+  const [programShortName, setProgramShortName] = useState('');
+  const [programColor, setProgramColor] = useState('#60A5FA');
+  const [programReleaseDate, setProgramReleaseDate] = useState('');
+  const [tracks, setTracks] = useState([]); // {id, name, type, isFavorite, notes}
+
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
+
+  const getUserCollectionPath = (collectionName) => {
+    if (!currentUserId || !appId) {
+      console.error("currentUserId or appId is not available for collection path.");
+      return null;
+    }
+    return `artifacts/${appId}/users/${currentUserId}/${collectionName}`;
+  };
+
+  const handleAddProgram = () => {
+    setEditingProgram(null);
+    setProgramName('');
+    setProgramShortName('');
+    setProgramColor('#60A5FA');
+    setProgramReleaseDate('');
+    setTracks([
+      { id: 'track_warmup', name: 'Warm-up', type: 'Warm-up', isFavorite: false, notes: '' },
+      { id: 'track_cooldown', name: 'Cool-down', type: 'Cool-down', isFavorite: false, notes: '' },
+    ]);
+    setShowProgramModal(true);
+  };
+
+  const handleEditProgram = (program) => {
+    setEditingProgram(program);
+    setProgramName(program.name);
+    setProgramShortName(program.shortName);
+    setProgramColor(program.color);
+    setProgramReleaseDate(program.releaseDate);
+    setTracks(program.tracks);
+    setShowProgramModal(true);
+  };
+
+  const handleSaveProgram = async () => {
+    if (!programName || !programShortName || !programReleaseDate) {
+      setMessageModalContent({
+        title: 'Error de Validació',
+        message: 'El nom del programa, el nom curt i la data de llançament són obligatoris.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
+    const newProgramData = {
+      name: programName,
+      shortName: programShortName,
+      color: programColor,
+      releaseDate: programReleaseDate,
+      tracks: tracks.map(({ id, ...rest }) => ({ id: id || `track_${Date.now()}_${Math.random()}`, ...rest })), // Ensure tracks have IDs
+      sessions: editingProgram ? editingProgram.sessions : [], // Preserve existing sessions if editing
+    };
+
+    try {
+      const programsCollectionPath = getUserCollectionPath('programs');
+      if (!programsCollectionPath) return;
+
+      if (editingProgram) {
+        const programRef = doc(db, programsCollectionPath, editingProgram.id);
+        await updateDoc(programRef, newProgramData);
+      } else {
+        // Generate a new ID for a new program, or use a predefined one if available
+        const newProgramId = newProgramData.shortName.toLowerCase().replace(/\s/g, ''); // Simple ID generation
+        await setDoc(doc(db, programsCollectionPath, newProgramId), newProgramData);
+      }
+      setShowProgramModal(false);
+    } catch (error) {
+      console.error("Error saving program:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al guardar el programa: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    }
+  };
+
+  const handleDeleteProgram = (programId) => {
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+    setMessageModalContent({
+      title: 'Confirmar Eliminació',
+      message: 'Estàs segur que vols eliminar aquest programa? Totes les seves sessions i tracks associats es perdran.',
+      isConfirm: true,
+      onConfirm: async () => {
+        try {
+          const programsCollectionPath = getUserCollectionPath('programs');
+          if (!programsCollectionPath) return;
+
+          await deleteDoc(doc(db, programsCollectionPath, programId));
+          setShowMessageModal(false);
+          setMessageModalContent({
+            title: 'Eliminat',
+            message: 'Programa eliminat correctament.',
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+          setShowMessageModal(true);
+        } catch (error) {
+          console.error("Error deleting program:", error);
+          setMessageModalContent({
+            title: 'Error',
+            message: `Hi ha hagut un error al eliminar el programa: ${error.message}`,
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+          setShowMessageModal(true);
+        }
+      },
+      onCancel: () => setShowMessageModal(false),
+    });
+    setShowMessageModal(true);
+  };
+
+  const handleAddTrack = () => {
+    setTracks(prev => [...prev, { id: `new_track_${Date.now()}_${Math.random()}`, name: '', type: '', isFavorite: false, notes: '' }]);
+  };
+
+  const handleUpdateTrack = (id, field, value) => {
+    setTracks(prev =>
+      prev.map(track =>
+        track.id === id ? { ...track, [field]: value } : track
+      )
+    );
+  };
+
+  const handleDeleteTrack = (id) => {
+    setTracks(prev => prev.filter(track => track.id !== id));
+  };
+
+
+  return (
+    <div className="p-6 bg-gray-50 min-h-screen font-inter">
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">Gestió de Programes</h1>
+      <button
+        onClick={handleAddProgram}
+        className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out mb-6"
+      >
+        Afegir Nou Programa
+      </button>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {programs.length > 0 ? programs.map(program => (
+          <div
+            key={program.id}
+            className="bg-white rounded-lg shadow-md p-6 flex flex-col justify-between hover:shadow-lg transition duration-300 ease-in-out"
+            style={{ borderLeft: `8px solid ${program.color}` }}
+          >
+            <div>
+              <h2 className="text-xl font-semibold text-gray-800 mb-2">{program.name} ({program.shortName})</h2>
+              <p className="text-gray-600 text-sm">Llançament: {formatDate(program.releaseDate)}</p>
+              <p className="text-gray-600 text-sm">Tracks: {program.tracks.length}</p>
+              <p className="text-gray-600 text-sm">Sessions: {program.sessions ? program.sessions.length : 0}</p>
+            </div>
+            <div className="mt-4 flex justify-end space-x-2">
+              <button
+                onClick={() => {
+                  setSelectedProgramId(program.id);
+                  setCurrentPage('programDetail');
+                }}
+                className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-3 text-sm rounded-lg shadow-md transition duration-300 ease-in-out"
+              >
+                Veure Detalls
+              </button>
+              <button
+                onClick={() => handleEditProgram(program)}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 text-sm rounded-lg shadow-md transition duration-300 ease-in-out"
+              >
+                Editar
+              </button>
+              <button
+                onClick={() => handleDeleteProgram(program.id)}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 text-sm rounded-lg shadow-md transition duration-300 ease-in-out"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        )) : <p className="text-gray-500">No hi ha programes definits. Afegeix el primer!</p>}
+      </div>
+
+      {showProgramModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">{editingProgram ? 'Editar Programa' : 'Afegir Nou Programa'}</h2>
+            <div className="mb-4">
+              <label htmlFor="programName" className="block text-gray-700 text-sm font-bold mb-2">Nom del Programa:</label>
+              <input
+                type="text"
+                id="programName"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={programName}
+                onChange={(e) => setProgramName(e.target.value)}
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="programShortName" className="block text-gray-700 text-sm font-bold mb-2">Nom Curt (ex: BP, BC):</label>
+              <input
+                type="text"
+                id="programShortName"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={programShortName}
+                onChange={(e) => setProgramShortName(e.target.value)}
+                maxLength="4"
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="programColor" className="block text-gray-700 text-sm font-bold mb-2">Color:</label>
+              <input
+                type="color"
+                id="programColor"
+                className="shadow border rounded-lg w-full h-10 px-1 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={programColor}
+                onChange={(e) => setProgramColor(e.target.value)}
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="programReleaseDate" className="block text-gray-700 text-sm font-bold mb-2">Data de Llançament:</label>
+              <input
+                type="date"
+                id="programReleaseDate"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={programReleaseDate}
+                onChange={(e) => setProgramReleaseDate(e.target.value)}
+              />
+            </div>
+
+            <h3 className="text-lg font-semibold text-gray-700 mb-3">Tracks</h3>
+            <div className="space-y-3 mb-4 max-h-40 overflow-y-auto pr-2">
+              {tracks.map((track, index) => (
+                <div key={track.id} className="flex items-center space-x-2 bg-gray-50 p-2 rounded-lg">
+                  <input
+                    type="text"
+                    placeholder="Nom del Track"
+                    className="shadow border rounded-lg py-1 px-2 text-gray-700 text-sm w-1/3"
+                    value={track.name}
+                    onChange={(e) => handleUpdateTrack(track.id, 'name', e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Tipus (ex: Squats, Combat)"
+                    className="shadow border rounded-lg py-1 px-2 text-gray-700 text-sm w-1/3"
+                    value={track.type}
+                    onChange={(e) => handleUpdateTrack(track.id, 'type', e.target.value)}
+                  />
+                  <label className="flex items-center space-x-1 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={track.isFavorite}
+                      onChange={(e) => handleUpdateTrack(track.id, 'isFavorite', e.target.checked)}
+                    />
+                    <span>Favorit</span>
+                  </label>
+                  <button
+                    onClick={() => handleDeleteTrack(track.id)}
+                    className="p-1 rounded-full bg-red-100 text-red-600 hover:bg-red-200"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 11-2 0v6a1 1 0 112 0V8z" clipRule="evenodd"></path></svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={handleAddTrack}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-3 rounded-lg shadow-sm transition duration-300 ease-in-out text-sm mb-4"
+            >
+              + Afegir Track
+            </button>
+
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => setShowProgramModal(false)}
+                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+              >
+                Cancel·lar
+              </button>
+              <button
+                onClick={handleSaveProgram}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+              >
+                Guardar Programa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showMessageModal && (
+        <MessageModal
+          show={showMessageModal}
+          title={messageModalContent.title}
+          message={messageModalContent.message}
+          onConfirm={messageModalContent.onConfirm}
+          onCancel={messageModalContent.onCancel}
+          isConfirm={messageModalContent.isConfirm}
+        />
+      )}
+    </div>
+  );
+};
+
+const ProgramDetail = ({ program, setCurrentPage, db, currentUserId, appId }) => {
+  const [sessionDate, setSessionDate] = useState('');
+  const [sessionNotes, setSessionNotes] = useState('');
+  const [tracks, setTracks] = useState(program ? program.tracks : []);
+
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
+
+  const getUserCollectionPath = (collectionName) => {
+    if (!currentUserId || !appId) {
+      console.error("currentUserId or appId is not available for collection path.");
+      return null;
+    }
+    return `artifacts/${appId}/users/${currentUserId}/${collectionName}`;
+  };
+
+  useEffect(() => {
+    if (program) {
+      setTracks(program.tracks);
+    }
+  }, [program]);
+
+  if (!program) {
+    return (
+      <div className="p-6 bg-gray-50 min-h-screen">
+        <p className="text-gray-700">Programa no trobat.</p>
+        <button
+          onClick={() => setCurrentPage('programs')}
+          className="mt-4 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+        >
+          Tornar a Programes
+        </button>
+      </div>
+    );
+  }
+
+  const handleAddSession = async () => {
+    if (!sessionDate) {
+      setMessageModalContent({
+        title: 'Error de Validació',
+        message: 'Si us plau, selecciona una data per a la sessió.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
+    const newSession = { date: sessionDate, notes: sessionNotes };
+    const programsCollectionPath = getUserCollectionPath('programs');
+    if (!programsCollectionPath) return;
+
+    try {
+      const programRef = doc(db, programsCollectionPath, program.id);
+      const programSnap = await getDoc(programRef);
+      const currentSessions = programSnap.exists() ? programSnap.data().sessions || [] : [];
+      await updateDoc(programRef, {
+        sessions: [...currentSessions, newSession]
+      });
+      setSessionDate('');
+      setSessionNotes('');
+      setMessageModalContent({
+        title: 'Sessió Afegida',
+        message: 'Sessió registrada correctament!',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    } catch (error) {
+      console.error("Error adding session:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al afegir la sessió: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    }
+  };
+
+  const handleToggleFavorite = async (trackId, currentStatus) => {
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+    const programsCollectionPath = getUserCollectionPath('programs');
+    if (!programsCollectionPath) return;
+
+    try {
+      const programRef = doc(db, programsCollectionPath, program.id);
+      const updatedTracks = tracks.map(track =>
+        track.id === trackId ? { ...track, isFavorite: !currentStatus } : track
+      );
+      await updateDoc(programRef, { tracks: updatedTracks });
+      setMessageModalContent({
+        title: 'Track Actualitzat',
+        message: 'Estat de favorit actualitzat correctament.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    } catch (error) {
+      console.error("Error toggling favorite status:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al actualitzar el track: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    }
+  };
+
+
+  return (
+    <div className="p-6 bg-gray-50 min-h-screen font-inter">
+      <div className="flex items-center mb-6">
+        <button
+          onClick={() => setCurrentPage('programs')}
+          className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out mr-4"
+        >
+          ← Tornar
+        </button>
+        <h1 className="text-3xl font-bold text-gray-800">{program.name} ({program.shortName})</h1>
+      </div>
+
+      {/* Program Details */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold text-gray-700 mb-4">Detalls del Programa</h2>
+        <p className="text-gray-600 text-sm">Color: <span className="inline-block w-4 h-4 rounded-full mr-2" style={{ backgroundColor: program.color }}></span>{program.color}</p>
+        <p className="text-gray-600 text-sm">Data de Llançament: {formatDate(program.releaseDate)}</p>
+      </div>
+
+      {/* Tracks List */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold text-gray-700 mb-4">Tracks</h2>
+        {tracks.length > 0 ? (
+          <ul className="space-y-3">
+            {tracks.map(track => (
+              <li key={track.id} className="flex items-center p-3 bg-gray-50 rounded-lg shadow-sm">
+                <div className="flex-grow">
+                  <p className="font-medium text-gray-800">{track.name} <span className="text-sm text-gray-500">({track.type})</span></p>
+                  {track.notes && <p className="text-xs text-gray-600 italic">"{track.notes}"</p>}
+                </div>
+                <button
+                  onClick={() => handleToggleFavorite(track.id, track.isFavorite)}
+                  className={`ml-4 p-2 rounded-full ${track.isFavorite ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-500'} hover:bg-yellow-200 transition duration-200`}
+                  title={track.isFavorite ? 'Eliminar de Favorits' : 'Afegir a Favorits'}
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.817 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.538 1.118l-2.817-2.034a1 1 0 00-1.176 0l-2.817 2.034c-.783.57-1.838-.197-1.538-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.381-1.81.588-1.81h3.462a1 1 0 00.95-.69l1.07-3.292z"></path></svg>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-gray-500">No hi ha tracks definits per a aquest programa.</p>
+        )}
+      </div>
+
+      {/* Register Session */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold text-gray-700 mb-4">Registrar Sessió Realitzada</h2>
+        <div className="mb-4">
+          <label htmlFor="sessionDate" className="block text-gray-700 text-sm font-bold mb-2">Data de la Sessió:</label>
+          <input
+            type="date"
+            id="sessionDate"
+            className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={sessionDate}
+            onChange={(e) => setSessionDate(e.target.value)}
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="sessionNotes" className="block text-gray-700 text-sm font-bold mb-2">Notes de la Sessió (Opcional):</label>
+          <textarea
+            id="sessionNotes"
+            className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+            rows="3"
+            value={sessionNotes}
+            onChange={(e) => setSessionNotes(e.target.value)}
+          ></textarea>
+        </div>
+        <button
+          onClick={handleAddSession}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+        >
+          Registrar Sessió
+        </button>
+      </div>
+      {showMessageModal && (
+        <MessageModal
+          show={showMessageModal}
+          title={messageModalContent.title}
+          message={messageModalContent.message}
+          onConfirm={messageModalContent.onConfirm}
+          onCancel={messageModalContent.onCancel}
+          isConfirm={messageModalContent.isConfirm}
+        />
+      )}
+    </div>
+  );
+};
+
 
 const Users = ({ users, setUsers, gyms, db, currentUserId, appId }) => { // Pass db, currentUserId, appId
   const [showUserModal, setShowUserModal] = useState(false);
@@ -1750,6 +2452,79 @@ const GymsAndHolidays = ({ gyms, setGyms, db, currentUserId, appId }) => { // Pa
   );
 };
 
+const Schedule = ({ programs, scheduleOverrides, setScheduleOverrides, fixedSchedules, users, setPrograms, gyms, recurringSessions, missedDays, setMissedDays, db, currentUserId, appId }) => {
+  // This component will primarily be for managing schedule data, not the interactive calendar
+  // The interactive calendar is now in Dashboard for a quick overview.
+  // We can add components here for direct management of overrides if needed.
+  return (
+    <div className="p-6 bg-gray-50 min-h-screen font-inter">
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">Gestió del Calendari (Horaris i Substitucions)</h1>
+      
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold text-gray-700 mb-4">Horaris Fixos Actius</h2>
+        {fixedSchedules.length > 0 ? (
+          <ul className="list-disc list-inside space-y-2 text-gray-700">
+            {fixedSchedules.map(fs => (
+              <li key={fs.id}>**Actiu des del {formatDate(fs.startDate)}**: {Object.keys(fs.schedule).filter(day => fs.schedule[day].length > 0).join(', ')}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-gray-500">No hi ha horaris fixos definits. Ves a Configuració &gt; Gestió d'Horaris Fixos per afegir-ne.</p>
+        )}
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold text-gray-700 mb-4">Sessions Recurrents Actives</h2>
+        {recurringSessions.length > 0 ? (
+          <ul className="list-disc list-inside space-y-2 text-gray-700">
+            {recurringSessions.map(rs => {
+              const program = programs.find(p => p.id === rs.programId);
+              const gym = gyms.find(g => g.id === rs.gymId);
+              return (
+                <li key={rs.id}>**{program?.shortName || 'N/A'}** a les {rs.time} ({gym?.name || 'N/A'}) els {rs.daysOfWeek.join(', ')} (des del {formatDate(rs.startDate)}{rs.endDate && ` fins al ${formatDate(rs.endDate)}`})</li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="text-gray-500">No hi ha sessions recurrents definides. Ves a Configuració &gt; Sessions Recurrents per afegir-ne.</p>
+        )}
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold text-gray-700 mb-4">Substitucions Programades (Overrides)</h2>
+        {scheduleOverrides.length > 0 ? (
+          <ul className="list-disc list-inside space-y-2 text-gray-700">
+            {scheduleOverrides.map(so => (
+              <li key={so.id}>**{formatDate(so.date)}**: {so.sessions.map(s => `${programs.find(p => p.id === s.programId)?.shortName || 'N/A'} (${s.time} a ${gyms.find(g => g.id === s.gymId)?.name || 'N/A'})`).join(', ')}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-gray-500">No hi ha substitucions programades. Pots afegir-les des del Dashboard (calendari) fent clic a un dia.</p>
+        )}
+      </div>
+
+       <div className="bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-xl font-semibold text-gray-700 mb-4">Dies No Assistits</h2>
+        {missedDays.length > 0 ? (
+          <ul className="list-disc list-inside space-y-2 text-gray-700">
+            {missedDays.map(md => {
+              const gym = gyms.find(g => g.id === md.gymId);
+              return (
+                <li key={md.id}>**{formatDate(md.date)}**: Gimnàs: {gym?.name || 'Tots els gimnasos'} {md.notes && `(${md.notes})`}</li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="text-gray-500">No hi ha dies no assistits registrats. Pots afegir-los des del Dashboard (calendari) fent clic a un dia.</p>
+        )}
+      </div>
+
+      <p className="mt-6 text-gray-600">Per interactuar amb el calendari dia a dia i gestionar sessions o marcar dies com a no assistits, torna al **Dashboard**.</p>
+    </div>
+  );
+};
+
+
 const Mixes = ({ programs }) => {
   const favoriteTracks = programs.flatMap(program =>
     program.tracks.filter(track => track.isFavorite).map(track => ({
@@ -2472,14 +3247,13 @@ function App() {
   useEffect(() => {
     const initializeFirebase = async () => {
       try {
-        // Log environment variable to console for debugging on Netlify
-        // *** IMPORTANT: Change from process.env to import.meta.env for Vite projects ***
-        console.log("VITE_FIREBASE_CONFIG:", import.meta.env.VITE_FIREBASE_CONFIG);
-        console.log("VITE_APP_ID:", import.meta.env.VITE_APP_ID);
+        // Safer access to environment variables
+        const env = import.meta.env || {}; // Ensure env is an object
+        console.log("VITE_FIREBASE_CONFIG:", env.VITE_FIREBASE_CONFIG);
+        console.log("VITE_APP_ID:", env.VITE_APP_ID);
 
-
-        const rawFirebaseConfig = import.meta.env.VITE_FIREBASE_CONFIG; // Changed from process.env
-        const envAppId = import.meta.env.VITE_APP_ID || 'default-app-id'; // Changed from process.env
+        const rawFirebaseConfig = env.VITE_FIREBASE_CONFIG;
+        const envAppId = env.VITE_APP_ID || 'default-app-id';
         setAppId(envAppId); // Store appId in state
 
         let firebaseConfig = {};
@@ -2487,10 +3261,10 @@ function App() {
           try {
             firebaseConfig = JSON.parse(rawFirebaseConfig);
           } catch (e) {
-            console.error("Error parsing VITE_FIREBASE_CONFIG:", e); // Changed variable name in log
+            console.error("Error parsing VITE_FIREBASE_CONFIG:", e);
             setMessageModalContent({
               title: 'Error de Configuració',
-              message: `Hi ha un problema amb la configuració de Firebase. Assegura't que VITE_FIREBASE_CONFIG és un JSON vàlid. Detalls: ${e.message}`, // Changed variable name in message
+              message: `Hi ha un problema amb la configuració de Firebase. Assegura't que VITE_FIREBASE_CONFIG és un JSON vàlid. Detalls: ${e.message}`,
               isConfirm: false,
               onConfirm: () => setShowMessageModal(false),
             });
@@ -2525,7 +3299,7 @@ function App() {
 
         // Sign in anonymously if no custom token is provided (e.g., in Netlify deployments)
         // *** IMPORTANT: If using a custom token, ensure it's passed via VITE_INITIAL_AUTH_TOKEN if from env ***
-        const initialAuthToken = import.meta.env.VITE_INITIAL_AUTH_TOKEN || null; // Changed from process.env
+        const initialAuthToken = env.VITE_INITIAL_AUTH_TOKEN || null; // Safer access
 
         if (initialAuthToken) {
           await signInWithCustomToken(firebaseAuth, initialAuthToken);
@@ -2650,7 +3424,7 @@ function App() {
 
     switch (currentPage) {
       case 'dashboard':
-        return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} />;
+        return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} db={dbInstance} currentUserId={currentUserId} appId={appId} setMissedDays={setMissedDays} />;
       case 'programs':
         return <Programs programs={programs} setPrograms={setPrograms} setCurrentPage={setCurrentPage} setSelectedProgramId={setSelectedProgramId} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
       case 'programDetail':
@@ -2673,7 +3447,7 @@ function App() {
       case 'monthlyReport':
         return <MonthlyReport programs={programs} gyms={gyms} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} scheduleOverrides={scheduleOverrides} missedDays={missedDays} />;
       default:
-        return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} />;
+        return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} db={dbInstance} currentUserId={currentUserId} appId={appId} setMissedDays={setMissedDays} />;
     }
   };
 
