@@ -1,174 +1,161 @@
-import React, { useState, useEffect } from 'react';
-import { formatDate, normalizeDateToStartOfDay, getLocalDateString } from '../../utils/dateHelpers.js';
-import { getActiveFixedSchedule } from '../../utils/scheduleHelpers.js';
-
-const MonthlyReport = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleOverrides, missedDays }) => {
-  const [reportMonth, setReportMonth] = useState(new Date());
-  const [monthlySummary, setMonthlySummary] = useState({});
-  const [loading, setLoading] = useState(false);
-
-  const daysOfWeekNames = ['Diumenge', 'Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte'];
-
-  // Calculate the billing period (26th to 25th) for the given month
-  const getBillingPeriod = (dateInMonth) => {
-    const year = dateInMonth.getFullYear();
-    const month = dateInMonth.getMonth(); // 0-11
-
-    let startDate, endDate;
-
-    // If the 26th of the current month is before or on the given date
-    if (dateInMonth.getDate() >= 26) {
-      startDate = new Date(year, month, 26);
-      endDate = new Date(year, month + 1, 25);
-    } else {
-      // If the given date is before the 26th, the period started last month
-      startDate = new Date(year, month - 1, 26);
-      endDate = new Date(year, month, 25);
-    }
-    return { startDate: normalizeDateToStartOfDay(startDate), endDate: normalizeDateToStartOfDay(endDate) };
-  };
+import React, { useState, useEffect } => {
+  const [reportMonth, setReportMonth] = useState(getLocalDateString(new Date()).substring(0, 7)); // YYYY-MM
+  const [reportData, setReportData] = useState([]);
+  const [totalWorkingMinutes, setTotalWorkingMinutes] = useState(0);
+  const [totalVacationDaysTaken, setTotalVacationDaysTaken] = useState(0);
 
   useEffect(() => {
-    setLoading(true);
-    const calculateReport = () => {
-      const { startDate, endDate } = getBillingPeriod(reportMonth);
-      const summary = {}; // { gymId: { actualSessions: count, missedSessions: count, expectedSessions: count } }
-
-      gyms.forEach(gym => {
-        summary[gym.id] = {
-          actualSessions: 0,
-          missedSessions: 0,
-          expectedSessions: 0,
-          name: gym.name
-        };
-      });
-
-      let currentDate = new Date(startDate);
-      while (currentDate <= endDate) {
-        const dateNormalized = normalizeDateToStartOfDay(currentDate);
-        const dateStr = getLocalDateString(dateNormalized);
-        const dayOfWeek = dateNormalized.getDay();
-        const dayName = daysOfWeekNames[dayOfWeek];
-
-        // Get expected sessions for this day
-        const activeFixedSchedule = getActiveFixedSchedule(dateNormalized, fixedSchedules);
-        const fixedDaySessions = activeFixedSchedule[dayName] || [];
-
-        const recurringSessionsForDay = recurringSessions.filter(rec => {
-          const recStartDateNormalized = normalizeDateToStartOfDay(rec.startDate);
-          const recEndDateNormalized = rec.endDate ? normalizeDateToStartOfDay(rec.endDate) : null;
-          return rec.daysOfWeek.includes(dayName) &&
-                 dateNormalized >= recStartDateNormalized &&
-                 (!recEndDateNormalized || dateNormalized <= recEndDateNormalized);
-        });
-
-        // Check for overrides
-        const override = scheduleOverrides.find(so => normalizeDateToStartOfDay(so.date).getTime() === dateNormalized.getTime());
-        let scheduledSessionsForDay = [];
-        if (override) {
-          scheduledSessionsForDay = override.sessions;
-        } else {
-          const combinedSessions = [...fixedDaySessions, ...recurringSessionsForDay];
-          const uniqueSessions = [];
-          const seen = new Set();
-          combinedSessions.forEach(session => {
-            const key = `${session.programId}-${session.time}-${session.gymId}`;
-            if (!seen.has(key)) {
-              uniqueSessions.push(session);
-              seen.add(key);
-            }
-          });
-          scheduledSessionsForDay = uniqueSessions;
-        }
-
-        // Check for missed days relevant to this specific session or 'all_gyms'
-        scheduledSessionsForDay.forEach(session => {
-          const isSessionMissed = missedDays.some(md =>
-            normalizeDateToStartOfDay(md.date).getTime() === dateNormalized.getTime() &&
-            (md.gymId === 'all_gyms' || md.gymId === session.gymId)
-          );
-
-          if (summary[session.gymId]) {
-            summary[session.gymId].expectedSessions++;
-            if (isSessionMissed) {
-              summary[session.gymId].missedSessions++;
-            } else {
-              summary[session.gymId].actualSessions++;
-            }
-          }
-        });
-
-        currentDate.setDate(currentDate.getDate() + 1); // Move to next day
-      }
-      setMonthlySummary(summary);
-      setLoading(false);
-    };
-
-    // Ensure all necessary data for report calculation is loaded
-    if (programs.length > 0 && gyms.length > 0 && fixedSchedules.length > 0 && recurringSessions.length > 0 && scheduleOverrides.length > 0 && missedDays.length > 0) {
-      calculateReport();
-    } else {
-      setLoading(true); // Keep loading if data is not ready
-    }
+    generateReport();
   }, [reportMonth, programs, gyms, fixedSchedules, recurringSessions, scheduleOverrides, missedDays]);
 
-  const goToPreviousMonth = () => {
-    setReportMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-  };
+  const generateReport = () => {
+    const [yearStr, monthStr] = reportMonth.split('-');
+    const year = parseInt(yearStr);
+    const month = parseInt(monthStr) - 1; // Months are 0-indexed
 
-  const goToNextMonth = () => {
-    setReportMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-  };
+    const numDays = new Date(year, month + 1, 0).getDate();
+    let currentMonthData = [];
+    let calculatedTotalMinutes = 0;
+    let calculatedTotalVacationDays = 0;
 
-  const { startDate, endDate } = getBillingPeriod(reportMonth);
+    for (let day = 1; day <= numDays; day++) {
+      const fullDate = new Date(year, month, day);
+      const isoDate = getLocalDateString(fullDate);
+      const dayName = fullDate.toLocaleDateString('ca-ES', { weekday: 'long' });
+
+      const isWeekend = fullDate.getDay() === 0 || fullDate.getDay() === 6; // Sunday=0, Saturday=6
+
+      const override = scheduleOverrides.find(so => so.date === isoDate);
+      const missed = missedDays.find(md => md.date === isoDate);
+
+      let dayType = 'Normal';
+      let programInfo = 'No programat';
+      let minutes = 0;
+      let notes = '';
+
+      if (missed) {
+        dayType = 'DIA LLIURE';
+        calculatedTotalVacationDays++;
+      } else if (override) {
+        dayType = 'Canvi Horari';
+        programInfo = override.sessions.map(s => {
+          const program = programs.find(p => p.id === s.programId);
+          const gym = gyms.find(g => g.id === s.gymId);
+          return `${program?.shortName || 'N/A'} (${gym?.name || 'N/A'})`;
+        }).join(', ');
+        minutes = override.sessions.length * 60; // Assuming 60 min per session
+        notes = override.notes || '';
+        calculatedTotalMinutes += minutes;
+      } else {
+        const activeFixedSchedule = getActiveFixedSchedule(fullDate, fixedSchedules);
+        const recurringSessionsToday = recurringSessions.filter(session => session.daysOfWeek.includes(dayName));
+
+        if (activeFixedSchedule[dayName] && activeFixedSchedule[dayName].length > 0) {
+          programInfo = activeFixedSchedule[dayName].map(s => {
+            const program = programs.find(p => p.id === s.programId);
+            const gym = gyms.find(g => g.id === s.gymId);
+            return `${program?.shortName || 'N/A'} (${gym?.name || 'N/A'})`;
+          }).join(', ');
+          minutes = activeFixedSchedule[dayName].length * 60;
+          calculatedTotalMinutes += minutes;
+        } else if (recurringSessionsToday.length > 0) {
+            programInfo = recurringSessionsToday.map(s => {
+                const program = programs.find(p => p.id === s.programId);
+                const gym = gyms.find(g => g.id === s.gymId);
+                return `${program?.shortName || 'N/A'} (${gym?.name || 'N/A'})`;
+            }).join(', ');
+            minutes = recurringSessionsToday.length * 60;
+            calculatedTotalMinutes += minutes;
+        } else if (isWeekend) {
+            dayType = 'Cap de Setmana';
+            programInfo = 'No laborable';
+        } else {
+            programInfo = 'No programat'; // For weekdays without fixed or recurring sessions
+        }
+      }
+
+      currentMonthData.push({
+        date: isoDate,
+        dayName: dayName,
+        dayType: dayType,
+        programInfo: programInfo,
+        minutes: minutes,
+        notes: notes,
+      });
+    }
+
+    setReportData(currentMonthData);
+    setTotalWorkingMinutes(calculatedTotalMinutes);
+    setTotalVacationDaysTaken(calculatedTotalVacationDays);
+  };
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-inter">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Informe Mensual de Sessions</h1>
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">Informe Mensual de Classes</h1>
 
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <button onClick={goToPreviousMonth} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out">
-            Mes Anterior
-          </button>
-          <h2 className="text-xl font-semibold text-gray-700">
-            Període: {formatDate(startDate)} - {formatDate(endDate)}
-          </h2>
-          <button onClick={goToNextMonth} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out">
-            Mes Següent
-          </button>
-        </div>
-
-        {loading ? (
-          <p className="text-gray-600">Calculant informe...</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Object.values(monthlySummary).length > 0 ? Object.values(monthlySummary).map(gymSummary => (
-              <div key={gymSummary.name} className="p-4 rounded-lg bg-green-50 border-l-4 border-green-400">
-                <h3 className="text-lg font-medium text-gray-800">{gymSummary.name}</h3>
-                <p className="text-sm text-gray-600">Sessions Realitzades: <span className="font-semibold text-green-700">{gymSummary.actualSessions}</span></p>
-                <p className="text-sm text-gray-600">Sessions No Assistides: <span className="font-semibold text-red-700">{gymSummary.missedSessions}</span></p>
-                <p className="text-sm text-gray-600">Sessions Programades: <span className="font-semibold text-gray-700">{gymSummary.expectedSessions}</span></p>
-              </div>
-            )) : <p className="text-gray-500">No hi ha dades suficients per generar l'informe.</p>}
-          </div>
-        )}
+      <div className="flex items-center space-x-4 mb-6 bg-white p-4 rounded-lg shadow-md">
+        <label htmlFor="reportMonth" className="text-gray-700 font-semibold">Seleccionar Mes:</label>
+        <input
+          type="month"
+          id="reportMonth"
+          value={reportMonth}
+          onChange={(e) => setReportMonth(e.target.value)}
+          className="shadow border rounded-lg py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
       </div>
 
-      {/* List of Missed Days */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-semibold text-gray-700 mb-4">Dies No Assistits Registrats</h2>
-        {missedDays.length > 0 ? (
-          <ul className="space-y-2">
-            {missedDays.sort((a,b) => new Date(b.date) - new Date(a.date)).map((md, index) => (
-              <li key={index} className="text-gray-700 text-sm p-2 bg-gray-50 rounded-lg">
-                <span className="font-medium">{formatDate(md.date)}</span> - Gimnàs: {gyms.find(g => g.id === md.gymId)?.name || 'Tots els gimnasos'} {md.notes && `(${md.notes})`}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-gray-500">No hi ha dies no assistits registrats.</p>
-        )}
+      <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+        <h2 className="text-xl font-semibold text-gray-800 mb-4">Resum del Mes</h2>
+        <p className="text-gray-700 mb-2">Total de minuts de classes impartides: <span className="font-medium text-blue-700">{totalWorkingMinutes} minuts</span></p>
+        <p className="text-gray-700 mb-2">Dies lliures/vacances preses: <span className="font-medium text-red-700">{totalVacationDaysTaken} dies</span></p>
+        {gyms.map(gym => {
+          const takenForGym = missedDays.filter(md => 
+            md.date.startsWith(reportMonth) && // Check if within the selected month
+            // Assuming missedDays has gymId or can be inferred (needs more logic for multi-gym missed days)
+            // For simplicity, this currently counts all missed days in the month as taken, regardless of specific gym.
+            // If you need per-gym tracking for missedDays, the missedDays structure would need to store gymId.
+            // For now, let's just count total.
+            true
+          ).length;
+          // Remaining logic for totalVacationDays needs a more sophisticated way to track allocated vs taken per gym.
+          // This requires a `vacationsTaken` field per gym document in Firestore, rather than just `missedDays`.
+          // For now, only show `totalVacationDays` from gym config.
+          return (
+            <p key={gym.id} className="text-gray-700 mb-1 ml-4">
+              Dies de vacances assignats a {gym.name}: <span className="font-medium">{gym.totalVacationDays} dies</span>
+            </p>
+          );
+        })}
+      </div>
+
+      <div className="bg-white p-6 rounded-lg shadow-md">
+        <h2 className="text-xl font-semibold text-gray-800 mb-4">Detall Diari</h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white rounded-lg overflow-hidden">
+            <thead className="bg-gray-200">
+              <tr>
+                <th className="py-2 px-4 text-left text-gray-700 font-bold">Data</th>
+                <th className="py-2 px-4 text-left text-gray-700 font-bold">Dia</th>
+                <th className="py-2 px-4 text-left text-gray-700 font-bold">Tipus de Dia</th>
+                <th className="py-2 px-4 text-left text-gray-700 font-bold">Programa(es) / Estat</th>
+                <th className="py-2 px-4 text-left text-gray-700 font-bold">Minuts</th>
+                <th className="py-2 px-4 text-left text-gray-700 font-bold">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reportData.map((day, index) => (
+                <tr key={index} className="border-b border-gray-200 hover:bg-gray-50">
+                  <td className="py-2 px-4">{formatDate(day.date)}</td>
+                  <td className="py-2 px-4">{day.dayName}</td>
+                  <td className="py-2 px-4">{day.dayType}</td>
+                  <td className="py-2 px-4">{day.programInfo}</td>
+                  <td className="py-2 px-4">{day.minutes}</td>
+                  <td className="py-2 px-4">{day.notes}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
