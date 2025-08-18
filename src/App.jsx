@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from 'react';
+// Importa les funcions de Firebase
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, getDoc, setDoc, collection, query, onSnapshot, updateDoc, deleteDoc, addDoc } from 'firebase/firestore';
 
 // Helper to format dates
 const formatDate = (dateString) => {
@@ -21,112 +25,6 @@ const getLocalDateString = (date) => {
   const day = d.getDate().toString().padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
-
-// Define some initial data for demonstration purposes
-const initialPrograms = [
-  { id: 'bp120', name: 'BodyPump 120', shortName: 'BP', color: '#EF4444', releaseDate: '2024-09-01', tracks: [
-    { id: 'bp120_t1', name: 'Warm-up', type: 'Warm-up', isFavorite: false, notes: '' },
-    { id: 'bp120_t2', name: 'Squats', type: 'Squats', isFavorite: true, notes: 'Molta energia!' },
-    { id: 'bp120_t3', name: 'Chest', type: 'Chest', isFavorite: false, notes: '' },
-    { id: 'bp120_t4', name: 'Back', type: 'Back', isFavorite: false, notes: '' },
-    { id: 'bp120_t5', name: 'Triceps', type: 'Triceps', isFavorite: false, notes: '' },
-    { id: 'bp120_t6', name: 'Biceps', type: 'Biceps', isFavorite: false, notes: '' },
-    { id: 'bp120_t7', name: 'Lunges', type: 'Lunges', isFavorite: false, notes: '' },
-    { id: 'bp120_t8', name: 'Shoulders', type: 'Shoulders', isFavorite: false, notes: '' },
-    { id: 'bp120_t9', name: 'Core', type: 'Core', isFavorite: true, notes: 'Bon track de core.' },
-    { id: 'bp120_t10', name: 'Cool-down', type: 'Cool-down', isFavorite: false, notes: '' },
-  ], sessions: [] },
-  { id: 'bc95', name: 'BodyCombat 95', shortName: 'BC', color: '#FCD34D', releaseDate: '2024-10-01', tracks: [
-    { id: 'bc95_t1', name: 'Warm-up', type: 'Warm-up', isFavorite: false, notes: '' },
-    { id: 'bc95_t2', name: 'Combat 1', type: 'Combat', isFavorite: true, notes: 'Ritme ràpid.' },
-    { id: 'bc95_t3', name: 'Power 1', type: 'Power', isFavorite: false, notes: '' },
-    { id: 'bc95_t4', name: 'Combat 2', type: 'Combat', isFavorite: false, notes: '' },
-    { id: 'bc95_t5', name: 'Power 2', type: 'Power', isFavorite: false, notes: '' },
-    { id: 'bc95_t6', name: 'Combat 3', type: 'Combat', isFavorite: false, notes: '' },
-    { id: 'bc95_t7', name: 'Muay Thai', type: 'Muay Thai', isFavorite: false, notes: '' },
-    { id: 'bc95_t8', name: 'Power 3', type: 'Power', isFavorite: false, notes: '' },
-    { id: 'bc95_t9', name: 'Core', type: 'Core', isFavorite: false, notes: '' },
-    { id: 'bc95_t10', name: 'Cool-down', type: 'Cool-down', isFavorite: false, notes: '' },
-  ], sessions: [] },
-  { id: 'sb60', name: 'Sh\'Bam 60', shortName: 'SB', color: '#EC4899', releaseDate: '2024-09-15', tracks: [
-    { id: 'sb60_t1', name: 'Warm-up', type: 'Warm-up', isFavorite: false, notes: '' },
-    { id: 'sb60_t2', name: 'Track 2', type: 'Dance', isFavorite: true, notes: 'Molt divertida!' },
-    { id: 'sb60_t3', name: 'Track 3', type: 'Dance', isFavorite: false, notes: '' },
-    { id: 'sb60_t4', name: 'Track 4', type: 'Dance', isFavorite: false, notes: '' },
-    { id: 'sb60_t5', name: 'Track 5', type: 'Dance', isFavorite: false, notes: '' },
-    { id: 'sb60_t6', name: 'Track 6', type: 'Dance', isFavorite: false, notes: '' },
-    { id: 'sb60_t7', name: 'Track 7', type: 'Dance', isFavorite: false, notes: '' },
-    { id: 'sb60_t8', name: 'Track 8', type: 'Dance', isFavorite: false, notes: '' },
-    { id: 'sb60_t9', name: 'Core', type: 'Core', isFavorite: false, notes: '' },
-    { id: 'sb60_t10', name: 'Cool-down', type: 'Cool-down', isFavorite: false, notes: '' },
-  ], sessions: [] },
-];
-
-const initialUsers = [
-  { id: 'user1', name: 'Maria Garcia', birthday: '1990-08-07', usualSessions: ['BP', 'SB'], notes: 'Li agrada la música llatina.', gymId: 'gym_arbucies', phone: '600112233', email: 'maria.g@example.com', photoUrl: 'https://placehold.co/50x50/aabbcc/ffffff?text=MG' },
-  { id: 'user2', name: 'Joan Pons', birthday: '1985-08-08', usualSessions: ['BC', 'BP'], notes: '', gymId: 'gym_arbucies', phone: '600445566', email: 'joan.p@example.com', photoUrl: 'https://placehold.co/50x50/ccddeeff/ffffff?text=JP' },
-  { id: 'user3', name: 'Anna Soler', birthday: '1992-08-10', usualSessions: ['SB'], notes: '', gymId: 'gym_santhilari', phone: '600778899', email: 'anna.s@example.com', photoUrl: 'https://placehold.co/50x50/eeffcc/ffffff?text=AS' },
-  // User for testing today's birthday highlight (Wednesday, August 6, 2025)
-  { id: 'user4', name: 'Test Aniversari', birthday: '2000-08-06', usualSessions: ['BP'], notes: 'Usuari de prova per aniversaris.', gymId: 'gym_santhilari', phone: '600000000', email: 'test.a@example.com', photoUrl: 'https://placehold.co/50x50/ffccaa/ffffff?text=TA' },
-];
-
-const initialGyms = [
-  { id: 'gym_arbucies', name: 'Gimnàs Arbúcies', workDays: ['Dilluns', 'Dimarts', 'Dijous'], totalVacationDays: 13, holidaysTaken: [] },
-  { id: 'gym_santhilari', name: 'Gimnàs Sant Hilari', workDays: ['Dimecres', 'Divendres'], totalVacationDays: 9, holidaysTaken: [] },
-];
-
-// Fixed weekly schedule (Program ID, Time, Gym ID)
-// This will now be an array to handle historical changes
-const initialFixedSchedules = [
-  {
-    id: 'fixed_1',
-    startDate: '2024-01-01', // This schedule is effective from this date
-    schedule: {
-      'Dilluns': [
-        { id: 'ses_d1_1', programId: 'sb60', time: '17:00', gymId: 'gym_arbucies' },
-        { id: 'ses_d1_2', programId: 'bp120', time: '18:00', gymId: 'gym_arbucies' },
-        { id: 'ses_d1_3', programId: 'bp120', time: '19:00', gymId: 'gym_arbucies' },
-      ],
-      'Dimarts': [
-        { id: 'ses_d2_1', programId: 'bc95', time: '18:00', gymId: 'gym_arbucies' },
-      ],
-      'Dimecres': [
-        { id: 'ses_d3_1', programId: 'bp120', time: '19:00', gymId: 'gym_santhilari' },
-      ],
-      'Dijous': [
-        { id: 'ses_d4_1', programId: 'sb60', time: '17:00', gymId: 'gym_arbucies' },
-        { id: 'ses_d4_2', programId: 'bp120', time: '18:00', gymId: 'gym_arbucies' },
-      ],
-      'Divendres': [
-        { id: 'ses_d5_1', programId: 'sb60', time: '10:00', gymId: 'gym_santhilari' },
-        { id: 'ses_d5_2', programId: 'bc95', time: '11:00', gymId: 'gym_santhilari' },
-        { id: 'ses_d5_3', programId: 'bp120', time: '12:00', gymId: 'gym_santhilari' },
-      ],
-      'Dissabte': [],
-      'Diumenge': [],
-    }
-  },
-  // Example of a future schedule change:
-  // {
-  //   startDate: '2025-01-01',
-  //   schedule: {
-  //     'Dilluns': [{ programId: 'bp120', time: '18:00', gymId: 'gym_arbucies' }],
-  //     // ... rest of the new schedule
-  //   }
-  // }
-];
-
-// Initial recurring sessions (example)
-const initialRecurringSessions = [
-  { id: 'rec_1', programId: 'bp120', time: '17:00', gymId: 'gym_santhilari', daysOfWeek: ['Divendres'], startDate: '2025-09-19', endDate: '2025-12-31', notes: 'Sessió de prova recurrent' }
-];
-
-// Initial missed days (new state)
-const initialMissedDays = [
-  { date: '2025-08-05', gymId: 'gym_arbucies', notes: 'Malalt' }, // Example: Missed yesterday
-  { date: '2025-07-28', gymId: 'gym_santhilari', notes: 'Viatge' }, // Example: Missed last month
-];
-
 
 // Function to get the active fixed schedule for a given date
 const getActiveFixedSchedule = (date, fixedSchedules) => {
@@ -737,18 +635,31 @@ const AddProgramModal = ({ show, onClose, onSave }) => {
 
 const Programs = ({ programs, setPrograms, setCurrentPage, setSelectedProgramId }) => {
   const [showAddProgramModal, setShowAddProgramModal] = useState(false);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
-  const handleSaveNewProgram = ({ name, shortName, color }) => {
-    setPrograms([...programs, {
-      id: `prog_${Date.now()}`,
-      name,
-      shortName,
-      color,
-      releaseDate: new Date().toISOString().split('T')[0],
-      tracks: [], // New programs start with no tracks, user can add them later
-      sessions: [],
-    }]);
-    setShowAddProgramModal(false);
+  const handleSaveNewProgram = async ({ name, shortName, color }) => {
+    try {
+      // Add a new document to the 'programs' collection
+      await addDoc(collection(db, 'programs'), {
+        name,
+        shortName,
+        color,
+        releaseDate: new Date().toISOString().split('T')[0],
+        tracks: [], // New programs start with no tracks, user can add them later
+        sessions: [],
+      });
+      setShowAddProgramModal(false);
+    } catch (error) {
+      console.error("Error adding program:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al guardar el programa: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    }
   };
 
   const calculateLastUsed = (program) => {
@@ -794,11 +705,24 @@ const Programs = ({ programs, setPrograms, setCurrentPage, setSelectedProgramId 
         onClose={() => setShowAddProgramModal(false)}
         onSave={handleSaveNewProgram}
       />
+      {showMessageModal && (
+        <MessageModal
+          show={showMessageModal}
+          title={messageModalContent.title}
+          message={messageModalContent.message}
+          onConfirm={messageModalContent.onConfirm}
+          onCancel={messageModalContent.onCancel}
+          isConfirm={messageModalContent.isConfirm}
+        />
+      )}
     </div>
   );
 };
 
 const ProgramDetail = ({ program, setPrograms, setCurrentPage }) => {
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
+
   if (!program) {
     return (
       <div className="p-6 bg-gray-50 min-h-screen font-inter">
@@ -833,17 +757,23 @@ const ProgramDetail = ({ program, setPrograms, setCurrentPage }) => {
     currentRotationStartDate = currentStart.toISOString().split('T')[0];
   }
 
-  const handleToggleFavorite = (trackId) => {
-    setPrograms(prevPrograms => prevPrograms.map(p =>
-      p.id === program.id
-        ? {
-            ...p,
-            tracks: p.tracks.map(t =>
-              t.id === trackId ? { ...t, isFavorite: !t.isFavorite } : t
-            ),
-          }
-        : p
-    ));
+  const handleToggleFavorite = async (trackId) => {
+    try {
+      const updatedTracks = program.tracks.map(t =>
+        t.id === trackId ? { ...t, isFavorite: !t.isFavorite } : t
+      );
+      const programRef = doc(db, 'programs', program.id);
+      await updateDoc(programRef, { tracks: updatedTracks });
+    } catch (error) {
+      console.error("Error toggling favorite track:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al marcar el track com a favorit: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    }
   };
 
   return (
@@ -914,6 +844,16 @@ const ProgramDetail = ({ program, setPrograms, setCurrentPage }) => {
           <p className="text-gray-500">Encara no s'han registrat sessions per a aquest programa.</p>
         )}
       </div>
+      {showMessageModal && (
+        <MessageModal
+          show={showMessageModal}
+          title={messageModalContent.title}
+          message={messageModalContent.message}
+          onConfirm={messageModalContent.onConfirm}
+          onCancel={messageModalContent.onCancel}
+          isConfirm={messageModalContent.isConfirm}
+        />
+      )}
     </div>
   );
 };
@@ -1023,7 +963,7 @@ const Schedule = ({ programs, scheduleOverrides, setScheduleOverrides, fixedSche
     setSessionsForDay(prevSessions => prevSessions.filter(session => session.id !== id));
   };
 
-  const handleSaveDaySessions = () => {
+  const handleSaveDaySessions = async () => {
     if (!selectedDate) return;
 
     const dateNormalized = normalizeDateToStartOfDay(selectedDate);
@@ -1043,80 +983,109 @@ const Schedule = ({ programs, scheduleOverrides, setScheduleOverrides, fixedSche
       }
     }
 
-    // Update programs' sessions history
-    // First, remove any sessions for this date from all programs
-    setPrograms(prevPrograms => prevPrograms.map(p => ({
-      ...p,
-      sessions: p.sessions.filter(s => normalizeDateToStartOfDay(s.date).getTime() !== dateNormalized.getTime())
-    })));
+    try {
+      const overrideRef = doc(db, 'scheduleOverrides', dateStr); // Use date as ID for overrides for easy lookup
 
-    // Then, add the new/updated sessions for this date
-    sessionsForDay.forEach(session => {
-      setPrograms(prevPrograms => prevPrograms.map(p =>
-        p.id === session.programId
-          ? { ...p, sessions: [...p.sessions, { date: dateStr, notes: session.notes || '' }] }
-          : p
-      ));
-    });
-
-    // Update schedule overrides
-    setScheduleOverrides(prevOverrides => {
-      const existingIndex = prevOverrides.findIndex(so => normalizeDateToStartOfDay(so.date).getTime() === dateNormalized.getTime());
       if (sessionsForDay.length > 0) {
-        const newOverride = { date: dateStr, sessions: sessionsForDay };
-        if (existingIndex > -1) {
-          const updatedOverrides = [...prevOverrides];
-          updatedOverrides[existingIndex] = newOverride;
-          return updatedOverrides;
-        } else {
-          return [...prevOverrides, newOverride];
-        }
+        const sessionsToSave = sessionsForDay.map(({ id, ...rest }) => rest); // Remove temporary IDs
+        await setDoc(overrideRef, { date: dateStr, sessions: sessionsToSave }, { merge: false });
       } else {
         // If no sessions, remove override
-        return prevOverrides.filter(so => normalizeDateToStartOfDay(so.date).getTime() !== dateNormalized.getTime());
-      }
-    });
-
-    // Check for birthdays
-    sessionsForDay.forEach(session => {
-      const programShortName = programs.find(p => p.id === session.programId)?.shortName;
-      const sessionGymId = session.gymId;
-
-      const birthdayUsers = users.filter(user => {
-        const userBirthday = normalizeDateToStartOfDay(user.birthday);
-        
-        return userBirthday.getMonth() === dateNormalized.getMonth() && userBirthday.getDate() === dateNormalized.getDate();
-      });
-
-      if (birthdayUsers.length > 0) {
-        const relevantBirthdays = birthdayUsers.filter(user =>
-          user.gymId === sessionGymId && user.usualSessions.some(s => s === programShortName)
-        );
-        if (relevantBirthdays.length > 0) {
-          setMessageModalContent({
-            title: '🎉 Aniversari!',
-            message: `Aniversari al ${gyms.find(g => g.id === sessionGymId)?.name}! ${relevantBirthdays.map(u => u.name).join(', ')} fan anys avui i solen assistir a la sessió de ${programShortName}!`,
-            isConfirm: false,
-            onConfirm: () => setShowMessageModal(false),
-          });
-          setShowMessageModal(true);
+        const docSnap = await getDoc(overrideRef);
+        if (docSnap.exists()) {
+          await deleteDoc(overrideRef);
         }
       }
-    });
 
-    setShowSessionModal(false);
+      // Update programs' sessions history in Firestore
+      // Fetch current programs to update their sessions array
+      const programsCollectionRef = collection(db, 'programs');
+      // No use getDocs directly inside onSnapshot context or in loops if data is frequently updated
+      // Use the 'programs' state directly, as it's already updated by onSnapshot
+      
+      // We need to operate on a copy of the current state or re-fetch for this specific update to be safe
+      // Let's refetch programs here to ensure we have the latest data before updating sessions.
+      // This is a common pattern for "transactions" like updates that depend on current state.
+      const programsSnapshot = await getDoc(programRef); // Simplified to one program for demonstration. Needs to fetch all or use a transaction
+      // A full re-fetch for all programs here could be expensive. 
+      // A better approach would be to update *only* the specific program's sessions.
+      // If the `programs` state is reliable (updated by onSnapshot), we can use it.
+      
+      // Assuming programs state is up-to-date due to onSnapshot:
+      for (const p of programs) { // Use the 'programs' state directly
+        const programRef = doc(db, 'programs', p.id);
+        const updatedSessions = p.sessions.filter(s => normalizeDateToStartOfDay(s.date).getTime() !== dateNormalized.getTime());
+        
+        // Add sessions from the current day that belong to this program
+        sessionsForDay.forEach(session => {
+          if (session.programId === p.id) {
+            updatedSessions.push({ date: dateStr, notes: session.notes || '' });
+          }
+        });
+        await updateDoc(programRef, { sessions: updatedSessions });
+      }
+
+
+      // Check for birthdays (this logic doesn't need to be awaited or try-catched within Firestore save)
+      sessionsForDay.forEach(session => {
+        const programShortName = programs.find(p => p.id === session.programId)?.shortName;
+        const sessionGymId = session.gymId;
+
+        const birthdayUsers = users.filter(user => {
+          const userBirthday = normalizeDateToStartOfDay(user.birthday);
+          return userBirthday.getMonth() === dateNormalized.getMonth() && userBirthday.getDate() === dateNormalized.getDate();
+        });
+
+        if (birthdayUsers.length > 0) {
+          const relevantBirthdays = birthdayUsers.filter(user =>
+            user.gymId === sessionGymId && user.usualSessions.some(s => s === programShortName)
+          );
+          if (relevantBirthdays.length > 0) {
+            setMessageModalContent({
+              title: '🎉 Aniversari!',
+              message: `Aniversari al ${gyms.find(g => g.id === sessionGymId)?.name}! ${relevantBirthdays.map(u => u.name).join(', ')} fan anys avui i solen assistir a la sessió de ${programShortName}!`,
+              isConfirm: false,
+              onConfirm: () => setShowMessageModal(false),
+            });
+            setShowMessageModal(true);
+          }
+        }
+      });
+      setShowSessionModal(false);
+
+    } catch (error) {
+      console.error("Error saving day sessions or updating program history:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al guardar les sessions del dia: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    }
   };
 
   // Handle adding a missed day
-  const handleAddMissedDay = ({ date, gymId, notes }) => {
-    setMissedDays(prev => [...prev, { date, gymId, notes }]);
-    setMessageModalContent({
-      title: 'Dia No Assistit Registrat',
-      message: `El dia ${formatDate(date)} al gimnàs ${gyms.find(g => g.id === gymId)?.name || 'tots els gimnasos'} ha estat marcat com a no assistit.`,
-      isConfirm: false,
-      onConfirm: () => setShowMessageModal(false),
-    });
-    setShowMessageModal(true);
+  const handleAddMissedDay = async ({ date, gymId, notes }) => {
+    try {
+      await addDoc(collection(db, 'missedDays'), { date, gymId, notes });
+      setMessageModalContent({
+        title: 'Dia No Assistit Registrat',
+        message: `El dia ${formatDate(date)} al gimnàs ${gyms.find(g => g.id === gymId)?.name || 'tots els gimnasos'} ha estat marcat com a no assistit.`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    } catch (error) {
+      console.error("Error adding missed day:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al registrar el dia no assistit: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    }
   };
 
 
@@ -1391,7 +1360,7 @@ const Users = ({ users, setUsers, gyms }) => {
     setShowUserModal(true);
   };
 
-  const handleSaveUser = () => {
+  const handleSaveUser = async () => {
     if (!userName || !userBirthday || !userGymId) {
       setMessageModalContent({
         title: 'Error de Validació',
@@ -1404,7 +1373,6 @@ const Users = ({ users, setUsers, gyms }) => {
     }
 
     const newUser = {
-      id: editingUser ? editingUser.id : `user_${Date.now()}`,
       name: userName,
       birthday: userBirthday,
       usualSessions: userSessions.split(',').map(s => s.trim()).filter(Boolean),
@@ -1415,12 +1383,24 @@ const Users = ({ users, setUsers, gyms }) => {
       photoUrl: userPhotoUrl,
     };
 
-    if (editingUser) {
-      setUsers(users.map(u => u.id === newUser.id ? newUser : u));
-    } else {
-      setUsers([...users, newUser]);
+    try {
+      if (editingUser) {
+        const userRef = doc(db, 'users', editingUser.id);
+        await updateDoc(userRef, newUser);
+      } else {
+        await addDoc(collection(db, 'users'), newUser);
+      }
+      setShowUserModal(false);
+    } catch (error) {
+      console.error("Error saving user:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al guardar l'usuari: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
     }
-    setShowUserModal(false);
   };
 
   const handleDeleteUser = (userId) => {
@@ -1428,16 +1408,27 @@ const Users = ({ users, setUsers, gyms }) => {
       title: 'Confirmar Eliminació',
       message: 'Estàs segur que vols eliminar aquest usuari?',
       isConfirm: true,
-      onConfirm: () => {
-        setUsers(users.filter(user => user.id !== userId));
-        setShowMessageModal(false); // Close confirm modal
-        setMessageModalContent({ // Show success alert
-          title: 'Eliminat',
-          message: 'Usuari eliminat correctament.',
-          isConfirm: false,
-          onConfirm: () => setShowMessageModal(false),
-        });
-        setShowMessageModal(true);
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'users', userId));
+          setShowMessageModal(false); // Close confirm modal
+          setMessageModalContent({ // Show success alert
+            title: 'Eliminat',
+            message: 'Usuari eliminat correctament.',
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+          setShowMessageModal(true);
+        } catch (error) {
+          console.error("Error deleting user:", error);
+          setMessageModalContent({
+            title: 'Error',
+            message: `Hi ha hagut un error al eliminar l'usuari: ${error.message}`,
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+          setShowMessageModal(true);
+        }
       },
       onCancel: () => setShowMessageModal(false),
     });
@@ -1687,16 +1678,27 @@ const FixedScheduleManagement = ({ fixedSchedules, setFixedSchedules, programs, 
       title: 'Confirmar Eliminació',
       message: 'Estàs segur que vols eliminar aquest horari fix?',
       isConfirm: true,
-      onConfirm: () => {
-        setFixedSchedules(prevSchedules => prevSchedules.filter(s => s.id !== id));
-        setShowMessageModal(false);
-        setMessageModalContent({
-          title: 'Eliminat',
-          message: 'Horari fix eliminat correctament.',
-          isConfirm: false,
-          onConfirm: () => setShowMessageModal(false),
-        });
-        setShowMessageModal(true);
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'fixedSchedules', id));
+          setShowMessageModal(false);
+          setMessageModalContent({
+            title: 'Eliminat',
+            message: 'Horari fix eliminat correctament.',
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+          setShowMessageModal(true);
+        } catch (error) {
+          console.error("Error deleting fixed schedule:", error);
+          setMessageModalContent({
+            title: 'Error',
+            message: `Hi ha hagut un error al eliminar l'horari fix: ${error.message}`,
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+          setShowMessageModal(true);
+        }
       },
       onCancel: () => setShowMessageModal(false),
     });
@@ -1726,7 +1728,7 @@ const FixedScheduleManagement = ({ fixedSchedules, setFixedSchedules, programs, 
     }));
   };
 
-  const handleSaveFixedSchedule = () => {
+  const handleSaveFixedSchedule = async () => {
     if (!scheduleStartDate) {
       setMessageModalContent({
         title: 'Error de Validació',
@@ -1756,43 +1758,51 @@ const FixedScheduleManagement = ({ fixedSchedules, setFixedSchedules, programs, 
       }
     }
 
-    const newScheduleEntry = {
-      id: editingScheduleEntry && fixedSchedules.some(s => s.id === editingScheduleEntry.id)
-          ? editingScheduleEntry.id // Keep existing ID if editing an existing entry
-          : `fixed_${Date.now()}`, // Generate new ID for new or copied entries
+    const newScheduleEntryData = {
       startDate: scheduleStartDate,
       schedule: currentEditingSchedule,
     };
 
-    const isEditingExisting = editingScheduleEntry && fixedSchedules.some(s => s.id === editingScheduleEntry.id);
+    try {
+      if (editingScheduleEntry && fixedSchedules.some(s => s.id === editingScheduleEntry.id)) {
+        const scheduleRef = doc(db, 'fixedSchedules', editingScheduleEntry.id);
+        await updateDoc(scheduleRef, newScheduleEntryData);
+      } else {
+        // Handle new entry or copied entry
+        const latestExistingSchedule = fixedSchedules.length > 0
+          ? fixedSchedules.sort((a,b) => b.startDate.localeCompare(a.startDate))[0]
+          : null;
 
-    if (isEditingExisting) {
-      setFixedSchedules(prevSchedules => prevSchedules.map(s =>
-        s.id === newScheduleEntry.id ? newScheduleEntry : s
-      ).sort((a, b) => a.startDate.localeCompare(b.startDate)));
-    } else {
-      // This handles both fresh adds and copied entries
-      const latestExistingStartDate = fixedSchedules.length > 0 ? fixedSchedules[fixedSchedules.length - 1].startDate : '0000-01-01';
-      if (newScheduleEntry.startDate <= latestExistingStartDate && fixedSchedules.length > 0) {
-        setMessageModalContent({
-          title: 'Error de Data',
-          message: `La data d'inici del nou horari (${newScheduleEntry.startDate}) ha de ser posterior a l'últim horari existent (${latestExistingStartDate}).`,
-          isConfirm: false,
-          onConfirm: () => setShowMessageModal(false),
-        });
-        setShowMessageModal(true);
-        return;
+        if (latestExistingSchedule && newScheduleEntryData.startDate <= latestExistingSchedule.startDate) {
+          setMessageModalContent({
+            title: 'Error de Data',
+            message: `La data d'inici del nou horari (${newScheduleEntryData.startDate}) ha de ser posterior a l'últim horari existent (${latestExistingSchedule.startDate}).`,
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+          setShowMessageModal(true);
+          return;
+        }
+        await addDoc(collection(db, 'fixedSchedules'), newScheduleEntryData);
       }
-      setFixedSchedules(prevSchedules => [...prevSchedules, newScheduleEntry].sort((a, b) => a.startDate.localeCompare(b.startDate)));
+      setShowModal(false);
+      setMessageModalContent({
+        title: 'Guardat!',
+        message: 'Horari fix guardat correctament!',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowModal(true);
+    } catch (error) {
+      console.error("Error saving fixed schedule:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al guardar l'horari fix: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowModal(true);
     }
-    setShowModal(false);
-    setMessageModalContent({
-      title: 'Guardat!',
-      message: 'Horari fix guardat correctament!',
-      isConfirm: false,
-      onConfirm: () => setShowMessageModal(false),
-    });
-    setShowMessageModal(true);
   };
 
   return (
@@ -1849,7 +1859,7 @@ const FixedScheduleManagement = ({ fixedSchedules, setFixedSchedules, programs, 
                               return (
                                 <li key={sIdx}>{program?.shortName || 'N/A'} ({session.time}) a {gym?.name || 'N/A'}</li>
                               );
-                            })}
+                              })}
                           </ul>
                         ) : ' Sense sessions'}
                       </div>
@@ -1975,7 +1985,7 @@ const GymsAndHolidays = ({ gyms, setGyms }) => {
 
 
   // Example public holidays for Spain (Catalonia specific might vary)
-  // For a real app, this would come from an API or a more comprehensive list.
+  // For a real app, this would come from an from an API or a more comprehensive list.
   const publicHolidays2025 = [
     { date: '2025-01-01', name: 'Any Nou' },
     { date: '2025-01-06', name: 'Reis' },
@@ -1993,7 +2003,7 @@ const GymsAndHolidays = ({ gyms, setGyms }) => {
     { date: '2025-12-26', name: 'Sant Esteve' },
   ];
 
-  const handleAddHoliday = () => {
+  const handleAddHoliday = async () => {
     if (!selectedGymForHoliday || !holidayDate) {
       setMessageModalContent({
         title: 'Error de Validació',
@@ -2005,17 +2015,50 @@ const GymsAndHolidays = ({ gyms, setGyms }) => {
       return;
     }
 
-    setGyms(prevGyms => prevGyms.map(gym =>
-      gym.id === selectedGymForHoliday
-        ? { ...gym, holidaysTaken: [...gym.holidaysTaken, holidayDate] }
-        : gym
-    ));
-    setShowHolidayModal(false);
-    setHolidayDate('');
-    setHolidayNotes('');
+    try {
+      const gymRef = doc(db, 'gyms', selectedGymForHoliday);
+      // Get current holidaysTaken array to append to it
+      const gymSnap = await getDoc(gymRef);
+      const currentHolidays = gymSnap.exists() ? gymSnap.data().holidaysTaken || [] : [];
+      
+      if (currentHolidays.includes(holidayDate)) {
+        setMessageModalContent({
+          title: 'Error',
+          message: 'Aquesta data ja està marcada com a vacances per a aquest gimnàs.',
+          isConfirm: false,
+          onConfirm: () => setShowMessageModal(false),
+        });
+        setShowMessageModal(true);
+        return;
+      }
+
+      await updateDoc(gymRef, {
+        holidaysTaken: [...currentHolidays, holidayDate]
+      });
+
+      setShowHolidayModal(false);
+      setHolidayDate('');
+      setHolidayNotes('');
+      setMessageModalContent({
+        title: 'Vacances Registrades',
+        message: `Vacances per al gimnàs ${gyms.find(g => g.id === selectedGymForHoliday)?.name} el ${formatDate(holidayDate)} s'han registrat correctament.`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    } catch (error) {
+      console.error("Error adding holiday:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al guardar les vacances: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    }
   };
 
-  const handleSuggestHolidays = (year) => {
+  const handleSuggestHolidays = async (year) => {
     const suggestions = [];
     const daysOfWeek = ['Diumenge', 'Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte'];
 
@@ -2078,23 +2121,41 @@ const GymsAndHolidays = ({ gyms, setGyms }) => {
         title: 'Suggeriments de Vacances',
         message: message,
         isConfirm: true,
-        onConfirm: () => {
-          setGyms(prevGyms => prevGyms.map(gym => {
-            const gymSuggestions = suggestions.filter(s => s.gym === gym.name);
-            const newHolidays = gymSuggestions.flatMap(s => s.dates);
-            return {
-              ...gym,
-              holidaysTaken: [...gym.holidaysTaken, ...newHolidays].filter((value, index, self) => self.indexOf(value) === index) // Unique dates
-            };
-          }));
-          setShowMessageModal(false);
-          setMessageModalContent({
-            title: 'Fet!',
-            message: 'Vacances suggerides afegides!',
-            isConfirm: false,
-            onConfirm: () => setShowMessageModal(false),
-          });
-          setShowMessageModal(true);
+        onConfirm: async () => {
+          try {
+            for (const gym of gyms) {
+              const gymSuggestions = suggestions.filter(s => s.gym === gym.name);
+              const newHolidays = gymSuggestions.flatMap(s => s.dates);
+              
+              if (newHolidays.length > 0) {
+                const gymRef = doc(db, 'gyms', gym.id);
+                const gymSnap = await getDoc(gymRef);
+                const currentHolidays = gymSnap.exists() ? gymSnap.data().holidaysTaken || [] : [];
+                
+                const uniqueNewHolidays = [...new Set([...currentHolidays, ...newHolidays])]; // Merge and make unique
+                await updateDoc(gymRef, {
+                  holidaysTaken: uniqueNewHolidays
+                });
+              }
+            }
+            setShowMessageModal(false);
+            setMessageModalContent({
+              title: 'Fet!',
+              message: 'Vacances suggerides afegides!',
+              isConfirm: false,
+              onConfirm: () => setShowMessageModal(false),
+            });
+            setShowMessageModal(true);
+          } catch (error) {
+            console.error("Error adding suggested holidays:", error);
+            setMessageModalContent({
+              title: 'Error',
+              message: `Hi ha hagut un error al afegir les vacances suggerides: ${error.message}`,
+              isConfirm: false,
+              onConfirm: () => setShowMessageModal(false),
+            });
+            setShowMessageModal(true);
+          }
         },
         onCancel: () => setShowMessageModal(false),
       });
@@ -2321,7 +2382,7 @@ const RecurringSessions = ({ recurringSessions, setRecurringSessions, programs, 
     setShowModal(true);
   };
 
-  const handleSaveSession = () => {
+  const handleSaveSession = async () => {
     if (!programId || !time || !gymId || daysOfWeek.length === 0 || !startDate) {
       setMessageModalContent({
         title: 'Error de Validació',
@@ -2333,8 +2394,7 @@ const RecurringSessions = ({ recurringSessions, setRecurringSessions, programs, 
       return;
     }
 
-    const newSession = {
-      id: editingSession ? editingSession.id : `rec_${Date.now()}`,
+    const newSessionData = {
       programId,
       time,
       gymId,
@@ -2344,12 +2404,24 @@ const RecurringSessions = ({ recurringSessions, setRecurringSessions, programs, 
       notes,
     };
 
-    if (editingSession) {
-      setRecurringSessions(prev => prev.map(s => s.id === newSession.id ? newSession : s));
-    } else {
-      setRecurringSessions(prev => [...prev, newSession]);
+    try {
+      if (editingSession) {
+        const sessionRef = doc(db, 'recurringSessions', editingSession.id);
+        await updateDoc(sessionRef, newSessionData);
+      } else {
+        await addDoc(collection(db, 'recurringSessions'), newSessionData);
+      }
+      setShowModal(false);
+    } catch (error) {
+      console.error("Error saving recurring session:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al guardar la sessió recurrent: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
     }
-    setShowModal(false);
   };
 
   const handleDeleteSession = (sessionId) => {
@@ -2357,16 +2429,27 @@ const RecurringSessions = ({ recurringSessions, setRecurringSessions, programs, 
       title: 'Confirmar Eliminació',
       message: 'Estàs segur que vols eliminar aquesta sessió recurrent?',
       isConfirm: true,
-      onConfirm: () => {
-        setRecurringSessions(prev => prev.filter(session => session.id !== sessionId));
-        setShowMessageModal(false);
-        setMessageModalContent({
-          title: 'Eliminat',
-          message: 'Sessió recurrent eliminada correctament.',
-          isConfirm: false,
-          onConfirm: () => setShowMessageModal(false),
-        });
-        setShowMessageModal(true);
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'recurringSessions', sessionId));
+          setShowMessageModal(false);
+          setMessageModalContent({
+            title: 'Eliminat',
+            message: 'Sessió recurrent eliminada correctament.',
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+          setShowMessageModal(true);
+        } catch (error) {
+          console.error("Error deleting recurring session:", error);
+          setMessageModalContent({
+            title: 'Error',
+            message: `Hi ha hagut un error al eliminar la sessió recurrent: ${error.message}`,
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+          setShowMessageModal(true);
+        }
       },
       onCancel: () => setShowMessageModal(false),
     });
@@ -2764,51 +2847,306 @@ const MonthlyReport = ({ programs, gyms, fixedSchedules, recurringSessions, sche
 };
 
 
+// Global Firebase instances
+let db;
+let auth;
+let currentUserId; // To store the authenticated user's ID
+
 function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
-  const [programs, setPrograms] = useState(initialPrograms);
-  const [users, setUsers] = useState(initialUsers);
-  const [gyms, setGyms] = useState(initialGyms);
-  const [fixedSchedules, setFixedSchedules] = useState(initialFixedSchedules);
-  const [recurringSessions, setRecurringSessions] = useState(initialRecurringSessions);
-  const [scheduleOverrides, setScheduleOverrides] = useState([]); // For specific day changes
-  const [missedDays, setMissedDays] = useState(initialMissedDays); // New state for missed days
+  const [programs, setPrograms] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [gyms, setGyms] = useState([]);
+  const [fixedSchedules, setFixedSchedules] = useState([]);
+  const [recurringSessions, setRecurringSessions] = useState([]);
+  const [scheduleOverrides, setScheduleOverrides] = useState([]);
+  const [missedDays, setMissedDays] = useState([]);
   const [selectedProgramId, setSelectedProgramId] = useState(null);
+  const [isFirebaseReady, setIsFirebaseReady] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Carregant dades...');
 
-  // Example of how to add a session to a program's history (for testing)
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
+
+  // Dummy initial data for local development when Firebase is not configured
+  // (These are defined locally in the code and used if Firebase config is not found)
+  const initialPrograms = [
+    { id: 'bp120', name: 'BodyPump 120', shortName: 'BP', color: '#EF4444', releaseDate: '2024-09-01', tracks: [
+      { id: 'bp120_t1', name: 'Warm-up', type: 'Warm-up', isFavorite: false, notes: '' },
+      { id: 'bp120_t2', name: 'Squats', type: 'Squats', isFavorite: true, notes: 'Molta energia!' },
+      { id: 'bp120_t3', name: 'Chest', type: 'Chest', isFavorite: false, notes: '' },
+      { id: 'bp120_t4', name: 'Back', type: 'Back', isFavorite: false, notes: '' },
+      { id: 'bp120_t5', name: 'Triceps', type: 'Triceps', isFavorite: false, notes: '' },
+      { id: 'bp120_t6', name: 'Biceps', type: 'Biceps', isFavorite: false, notes: '' },
+      { id: 'bp120_t7', name: 'Lunges', type: 'Lunges', isFavorite: false, notes: '' },
+      { id: 'bp120_t8', name: 'Shoulders', type: 'Shoulders', isFavorite: false, notes: '' },
+      { id: 'bp120_t9', name: 'Core', type: 'Core', isFavorite: true, notes: 'Bon track de core.' },
+      { id: 'bp120_t10', name: 'Cool-down', type: 'Cool-down', isFavorite: false, notes: '' },
+    ], sessions: [
+      { date: '2025-07-01', notes: 'Primera sessió' },
+      { date: '2025-07-03', notes: '' },
+      { date: '2025-07-07', notes: '' },
+      { date: '2025-07-09', notes: 'Grup amb molta energia' },
+      { date: '2025-07-14', notes: '' },
+      { date: '2025-07-16', notes: '' },
+      { date: '2025-07-21', notes: 'Última sessió' },
+    ] },
+    { id: 'bc95', name: 'BodyCombat 95', shortName: 'BC', color: '#FCD34D', releaseDate: '2024-10-01', tracks: [
+      { id: 'bc95_t1', name: 'Warm-up', type: 'Warm-up', isFavorite: false, notes: '' },
+      { id: 'bc95_t2', name: 'Combat 1', type: 'Combat', isFavorite: true, notes: 'Ritme ràpid.' },
+      { id: 'bc95_t3', name: 'Power 1', type: 'Power', isFavorite: false, notes: '' },
+      { id: 'bc95_t4', name: 'Combat 2', type: 'Combat', isFavorite: false, notes: '' },
+      { id: 'bc95_t5', name: 'Power 2', type: 'Power', isFavorite: false, notes: '' },
+      { id: 'bc95_t6', name: 'Combat 3', type: 'Combat', isFavorite: false, notes: '' },
+      { id: 'bc95_t7', name: 'Muay Thai', type: 'Muay Thai', isFavorite: false, notes: '' },
+      { id: 'bc95_t8', name: 'Power 3', type: 'Power', isFavorite: false, notes: '' },
+      { id: 'bc95_t9', name: 'Core', type: 'Core', isFavorite: false, notes: '' },
+      { id: 'bc95_t10', name: 'Cool-down', type: 'Cool-down', isFavorite: false, notes: '' },
+    ], sessions: [] },
+    { id: 'sb60', name: 'Sh\'Bam 60', shortName: 'SB', color: '#EC4899', releaseDate: '2024-09-15', tracks: [
+      { id: 'sb60_t1', name: 'Warm-up', type: 'Warm-up', isFavorite: false, notes: '' },
+      { id: 'sb60_t2', name: 'Track 2', type: 'Dance', isFavorite: true, notes: 'Molt divertida!' },
+      { id: 'sb60_t3', name: 'Track 3', type: 'Dance', isFavorite: false, notes: '' },
+      { id: 'sb60_t4', type: 'Dance', isFavorite: false, notes: '' },
+      { id: 'sb60_t5', type: 'Dance', isFavorite: false, notes: '' },
+      { id: 'sb60_t6', type: 'Dance', isFavorite: false, notes: '' },
+      { id: 'sb60_t7', type: 'Dance', isFavorite: false, notes: '' },
+      { id: 'sb60_t8', type: 'Dance', isFavorite: false, notes: '' },
+      { id: 'sb60_t9', type: 'Core', isFavorite: false, notes: '' },
+      { id: 'sb60_t10', name: 'Cool-down', type: 'Cool-down', isFavorite: false, notes: '' },
+    ], sessions: [
+      { date: '2025-06-10', notes: '' },
+      { date: '2025-06-17', notes: '' },
+      { date: '2025-07-02', notes: '' },
+    ] },
+  ];
+
+  const initialUsers = [
+    { id: 'user1', name: 'Maria Garcia', birthday: '1990-08-07', usualSessions: ['BP', 'SB'], notes: 'Li agrada la música llatina.', gymId: 'gym_arbucies', phone: '600112233', email: 'maria.g@example.com', photoUrl: 'https://placehold.co/50x50/aabbcc/ffffff?text=MG' },
+    { id: 'user2', name: 'Joan Pons', birthday: '1985-08-08', usualSessions: ['BC', 'BP'], notes: '', gymId: 'gym_arbucies', phone: '600445566', email: 'joan.p@example.com', photoUrl: 'https://placehold.co/50x50/ccddeeff/ffffff?text=JP' },
+    { id: 'user3', name: 'Anna Soler', birthday: '1992-08-10', usualSessions: ['SB'], notes: '', gymId: 'gym_santhilari', phone: '600778899', email: 'anna.s@example.com', photoUrl: 'https://placehold.co/50x50/eeffcc/ffffff?text=AS' },
+    { id: 'user4', name: 'Test Aniversari', birthday: '2000-08-06', usualSessions: ['BP'], notes: 'Usuari de prova per aniversaris.', gymId: 'gym_santhilari', phone: '600000000', email: 'test.a@example.com', photoUrl: 'https://placehold.co/50x50/ffccaa/ffffff?text=TA' },
+  ];
+
+  const initialGyms = [
+    { id: 'gym_arbucies', name: 'Gimnàs Arbúcies', workDays: ['Dilluns', 'Dimarts', 'Dijous'], totalVacationDays: 13, holidaysTaken: [] },
+    { id: 'gym_santhilari', name: 'Gimnàs Sant Hilari', workDays: ['Dimecres', 'Divendres'], totalVacationDays: 9, holidaysTaken: [] },
+  ];
+
+  const initialFixedSchedules = [
+    {
+      id: 'fixed_1',
+      startDate: '2024-01-01',
+      schedule: {
+        'Dilluns': [
+          { id: 'ses_d1_1', programId: 'sb60', time: '17:00', gymId: 'gym_arbucies' },
+          { id: 'ses_d1_2', programId: 'bp120', time: '18:00', gymId: 'gym_arbucies' },
+          { id: 'ses_d1_3', programId: 'bp120', time: '19:00', gymId: 'gym_arbucies' },
+        ],
+        'Dimarts': [
+          { id: 'ses_d2_1', programId: 'bc95', time: '18:00', gymId: 'gym_arbucies' },
+        ],
+        'Dimecres': [
+          { id: 'ses_d3_1', programId: 'bp120', time: '19:00', gymId: 'gym_santhilari' },
+        ],
+        'Dijous': [
+          { id: 'ses_d4_1', programId: 'sb60', time: '17:00', gymId: 'gym_arbucies' },
+          { id: 'ses_d4_2', programId: 'bp120', time: '18:00', gymId: 'gym_arbucies' },
+        ],
+        'Divendres': [
+          { id: 'ses_d5_1', programId: 'sb60', time: '10:00', gymId: 'gym_santhilari' },
+          { id: 'ses_d5_2', programId: 'bc95', time: '11:00', gymId: 'gym_santhilari' },
+          { id: 'ses_d5_3', programId: 'bp120', time: '12:00', gymId: 'gym_santhilari' },
+        ],
+        'Dissabte': [],
+        'Diumenge': [],
+      }
+    },
+  ];
+
+  const initialRecurringSessions = [
+    { id: 'rec_1', programId: 'bp120', time: '17:00', gymId: 'gym_santhilari', daysOfWeek: ['Divendres'], startDate: '2025-09-19', endDate: '2025-12-31', notes: 'Sessió de prova recurrent' }
+  ];
+
+  const initialMissedDays = [
+    { id: 'md1', date: '2025-08-05', gymId: 'gym_arbucies', notes: 'Malalt' },
+    { id: 'md2', date: '2025-07-28', gymId: 'gym_santhilari', notes: 'Viatge' },
+  ];
+
+  // Initialize Firebase and set up authentication and data listeners
   useEffect(() => {
-    // Add some dummy sessions to programs to test rotation and stats
-    setPrograms(prevPrograms => prevPrograms.map(p => {
-      if (p.id === 'bp120') {
-        return {
-          ...p,
-          sessions: [
-            { date: '2025-07-01', notes: 'Primera sessió' },
-            { date: '2025-07-03', notes: '' },
-            { date: '2025-07-07', notes: '' },
-            { date: '2025-07-09', notes: 'Grup amb molta energia' },
-            { date: '2025-07-14', notes: '' },
-            { date: '2025-07-16', notes: '' },
-            { date: '2025-07-21', notes: 'Última sessió' },
-          ]
-        };
-      }
-      if (p.id === 'sb60') {
-        return {
-          ...p,
-          sessions: [
-            { date: '2025-06-10', notes: '' },
-            { date: '2025-06-17', notes: '' },
-            { date: '2025-07-02', notes: '' },
-          ]
-        };
-      }
-      return p;
-    }));
-  }, []);
+    const initializeFirebase = async () => {
+      try {
+        // Updated to read environment variables from process.env
+        // Netlify injects REACT_APP_ prefixed variables
+        const rawFirebaseConfig = process.env.REACT_APP_FIREBASE_CONFIG;
+        const appId = process.env.REACT_APP_APP_ID || 'default-app-id'; // Fallback for appId
 
+        let firebaseConfig = {};
+        if (rawFirebaseConfig) {
+          try {
+            firebaseConfig = JSON.parse(rawFirebaseConfig);
+          } catch (e) {
+            console.error("Error parsing REACT_APP_FIREBASE_CONFIG:", e);
+            setMessageModalContent({
+              title: 'Error de Configuració',
+              message: `Hi ha un problema amb la configuració de Firebase. Assegura't que REACT_APP_FIREBASE_CONFIG és un JSON vàlid. Detalls: ${e.message}`,
+              isConfirm: false,
+              onConfirm: () => setShowMessageModal(false),
+            });
+            setShowMessageModal(true);
+            setIsFirebaseReady(true);
+            setLoadingMessage('Error de configuració de Firebase.');
+            return;
+          }
+        }
+        
+        // If firebaseConfig is still empty after parsing, it means no valid config was provided
+        if (Object.keys(firebaseConfig).length === 0 || !firebaseConfig.projectId) {
+          console.warn("Firebase config not found or invalid. Using dummy data for local development.");
+          // Fallback to dummy data if no valid Firebase config is provided
+          setPrograms(initialPrograms);
+          setUsers(initialUsers);
+          setGyms(initialGyms);
+          setFixedSchedules(initialFixedSchedules);
+          setRecurringSessions(initialRecurringSessions);
+          setMissedDays(initialMissedDays);
+          setIsFirebaseReady(true);
+          setLoadingMessage('Dades locals carregades (sense connexió a Firebase).');
+          return; // Exit if using dummy data
+        }
+
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+
+        // Sign in anonymously if no custom token is provided (e.g., in Netlify deployments)
+        // Note: __initial_auth_token is typically for Canvas environment,
+        // so for Netlify, anonymous sign-in is the likely default.
+        const initialAuthToken = process.env.REACT_APP_INITIAL_AUTH_TOKEN || null; // Changed to process.env
+
+        if (initialAuthToken) {
+          await signInWithCustomToken(auth, initialAuthToken);
+        } else {
+          await signInAnonymously(auth);
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+          if (user) {
+            currentUserId = user.uid; // Set the user ID once authenticated
+            setLoadingMessage('Carregant dades del núvol...');
+            // Path for user-specific collections, using the appId from env vars
+            const getUserCollectionPath = (collectionName) => {
+              return `artifacts/${appId}/users/${currentUserId}/${collectionName}`;
+            };
+
+            // Setup real-time listeners for all collections
+            onSnapshot(collection(db, getUserCollectionPath('programs')), (snapshot) => {
+              setPrograms(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }, (error) => console.error("Error fetching programs:", error));
+
+            onSnapshot(collection(db, getUserCollectionPath('users')), (snapshot) => {
+              setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }, (error) => console.error("Error fetching users:", error));
+
+            onSnapshot(collection(db, getUserCollectionPath('gyms')), (snapshot) => {
+              setGyms(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }, (error) => console.error("Error fetching gyms:", error));
+
+            onSnapshot(collection(db, getUserCollectionPath('fixedSchedules')), (snapshot) => {
+              setFixedSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => a.startDate.localeCompare(b.startDate)));
+            }, (error) => console.error("Error fetching fixed schedules:", error));
+
+            onSnapshot(collection(db, getUserCollectionPath('recurringSessions')), (snapshot) => {
+              setRecurringSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }, (error) => console.error("Error fetching recurring sessions:", error));
+
+            onSnapshot(collection(db, getUserCollectionPath('scheduleOverrides')), (snapshot) => {
+              setScheduleOverrides(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }, (error) => console.error("Error fetching schedule overrides:", error));
+
+            onSnapshot(collection(db, getUserCollectionPath('missedDays')), (snapshot) => {
+              setMissedDays(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }, (error) => console.error("Error fetching missed days:", error));
+
+            setIsFirebaseReady(true);
+            setLoadingMessage('Dades carregades amb èxit!');
+
+            // Initial data seeding if collections are empty (first run)
+            const checkAndSeedData = async () => {
+              const programsCollection = collection(db, getUserCollectionPath('programs'));
+              const programsSnap = await getDoc(programsCollection); // Use getDoc to check existence of a specific document or getDocs for collection
+
+              // To check if a collection is empty, you usually need to fetch documents
+              const programsCount = (await programsSnap.get()).size; // Or programsSnap.empty
+              if (programsCount === 0) { // Check if programs collection is empty
+                setLoadingMessage('Inicialitzant dades per primera vegada...');
+                try {
+                  // Seed initialPrograms
+                  for (const p of initialPrograms) {
+                    await setDoc(doc(db, getUserCollectionPath('programs'), p.id), p);
+                  }
+                  // Seed initialUsers
+                  for (const u of initialUsers) {
+                    await setDoc(doc(db, getUserCollectionPath('users'), u.id), u);
+                  }
+                  // Seed initialGyms
+                  for (const g of initialGyms) {
+                    await setDoc(doc(db, getUserCollectionPath('gyms'), g.id), g);
+                  }
+                  // Seed initialFixedSchedules
+                  for (const fs of initialFixedSchedules) {
+                    await setDoc(doc(db, getUserCollectionPath('fixedSchedules'), fs.id), fs);
+                  }
+                  // Seed initialRecurringSessions
+                  for (const rs of initialRecurringSessions) {
+                    await setDoc(doc(db, getUserCollectionPath('recurringSessions'), rs.id), rs);
+                  }
+                  // Seed initialMissedDays
+                  for (const md of initialMissedDays) {
+                    await setDoc(doc(db, getUserCollectionPath('missedDays'), md.id), md); // Use predefined ID
+                  }
+                  setLoadingMessage('Dades inicials creades!');
+                } catch (seedError) {
+                  console.error("Error seeding initial data:", seedError);
+                  setMessageModalContent({
+                    title: 'Error d\'Inicialització',
+                    message: `Hi ha hagut un error al crear les dades inicials: ${seedError.message}`,
+                    isConfirm: false,
+                    onConfirm: () => setShowMessageModal(false),
+                  });
+                  setShowMessageModal(true);
+                }
+              }
+            };
+            checkAndSeedData();
+
+          } else {
+            console.log("No user signed in. Data will not be loaded from Firestore.");
+            setLoadingMessage('No s\'ha pogut autenticar. Les dades no es desaran.');
+            setIsFirebaseReady(true); // Still ready to render with empty data
+          }
+        });
+
+      } catch (error) {
+        console.error("Firebase initialization or auth error:", error);
+        setLoadingMessage(`Error de càrrega: ${error.message}`);
+        setIsFirebaseReady(true); // Indicate ready even if error, to show message
+      }
+    };
+
+    initializeFirebase();
+  }, []); // Run once on component mount
 
   const renderPage = () => {
+    if (!isFirebaseReady) {
+      return (
+        <div className="flex justify-center items-center min-h-[calc(100vh-100px)]">
+          <p className="text-xl text-gray-700">{loadingMessage}</p>
+        </div>
+      );
+    }
+
     switch (currentPage) {
       case 'dashboard':
         return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} />;
@@ -2839,14 +3177,19 @@ function App() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-100">
-      {/* Inter Font */}
+    <div className="flex flex-col min-h-screen bg-gray-100 font-inter">
+      {/* Inter Font (redundant if already in index.html, but harmless) */}
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
       {/* Navigation */}
       <nav className="bg-gradient-to-r from-blue-600 to-blue-800 p-4 shadow-lg">
         <div className="container mx-auto flex justify-between items-center">
           <h1 className="text-white text-2xl font-bold">Gym Instructor</h1> {/* Changed app name */}
+          {currentUserId && (
+            <div className="text-white text-sm">
+              ID d'usuari: <span className="font-mono text-blue-200">{currentUserId}</span>
+            </div>
+          )}
           <div className="space-x-4">
             <button onClick={() => setCurrentPage('dashboard')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Dashboard</button>
             <button onClick={() => setCurrentPage('programs')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Programes</button>
@@ -2868,9 +3211,20 @@ function App() {
       {/* Footer */}
       <footer className="bg-gray-800 text-white p-4 text-center text-sm">
         <div className="container mx-auto">
-          © 2025 LES MILLS Instructor App. Tots els drets reservats.
+          © 2025 Gym Instructor App. Tots els drets reservats.
         </div>
       </footer>
+
+      {showMessageModal && (
+        <MessageModal
+          show={showMessageModal}
+          title={messageModalContent.title}
+          message={messageModalContent.message}
+          onConfirm={messageModalContent.onConfirm}
+          onCancel={messageModalContent.onCancel}
+          isConfirm={messageModalContent.isConfirm}
+        />
+      )}
     </div>
   );
 }
