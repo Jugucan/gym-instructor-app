@@ -6,7 +6,7 @@ import { initializeApp } from 'firebase/app';
 import { getLocalDateString, normalizeDateToStartOfDay, formatDate, parseDateString } from '../../utils/dateHelpers.jsx';
 import { FaUserEdit, FaSave, FaTimesCircle, FaPlusCircle, FaTrashAlt } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../AuthContext'; // <--- LÍNIA CLAU ACTUALITZADA: canviat '../AuthContext' per '../../AuthContext'
+import { useAuth } from '../../contexts/AuthContext'; // <--- LÍNIA CLAU ACTUALITZADA: canviat '../../AuthContext' per '../../contexts/AuthContext'
 
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 const app = initializeApp(firebaseConfig);
@@ -19,7 +19,7 @@ const Dashboard = () => {
     const [userId, setUserId] = useState(null);
     const [userData, setUserData] = useState(null);
     const [editMode, setEditMode] = useState(false);
-    const [formData, setFormData] = {};
+    const [formData, setFormData] = useState({}); // Initialize as object
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [clients, setClients] = useState([]);
@@ -31,21 +31,30 @@ const Dashboard = () => {
             if (user) {
                 setUserId(user.uid);
                 await fetchUserData(user.uid);
-                await fetchClients(user.uid);
+                // Ensure fetchClients is called only if userId is available and authenticated
+                const clientUnsubscribe = await fetchClients(user.uid);
+                // Return cleanup function for clientUnsubscribe if it exists
+                return () => {
+                    if (clientUnsubscribe) clientUnsubscribe();
+                    unsubscribe();
+                };
             } else {
                 try {
                     await signIn();
+                    // After anonymous sign-in, auth.onAuthStateChanged will trigger again with the new user
                 } catch (anonError) {
                     console.error("Error signing in anonymously:", anonError);
                     setError("Could not sign in. Please try again later.");
                     setLoading(false);
                 }
             }
-            setLoading(false);
+            if (!user) setLoading(false); // Only set loading false if no user found initially
         });
 
+        // Cleanup for the main authStateChanged listener
         return () => unsubscribe();
     }, [signIn]);
+
 
     const fetchUserData = async (currentUserId) => {
         try {
@@ -81,10 +90,11 @@ const Dashboard = () => {
                 setError("Error loading client data.");
             });
 
-            return unsubscribe;
+            return unsubscribe; // Return the unsubscribe function for cleanup
         } catch (err) {
             console.error("Error fetching clients:", err);
             setError("Error loading client data.");
+            return () => {}; // Return a no-op function if there's an error
         }
     };
 
