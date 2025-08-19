@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, collection, query, onSnapshot, updateDoc, deleteDoc, addDoc, getDocs, where } from 'firebase/firestore';
 
-// Importa els nous components de pàgina
+// Importa els components de pàgina
 import Dashboard from './components/dashboard/Dashboard.jsx';
 import Programs from './components/programs/Programs.jsx';
 import ProgramDetail from './components/programs/ProgramDetail.jsx';
@@ -15,11 +15,14 @@ import Settings from './components/settings/Settings.jsx';
 import FixedScheduleManagement from './components/schedule/FixedScheduleManagement.jsx';
 import RecurringSessions from './components/schedule/RecurringSessions.jsx';
 import MonthlyReport from './components/reports/MonthlyReport.jsx';
-import Auth from './components/auth/Auth.jsx';
+import Auth from './components/auth/Auth.jsx'; // New Auth component
 
-// Importa els helpers i hooks
-import useFirestoreData from './hooks/useFirestoreData.jsx';
+// Importa els helpers i modals comuns
 import { MessageModal } from './components/common/MessageModal.jsx';
+
+// Import initial data
+import { initialPrograms, initialUsers, initialGyms, initialFixedSchedules, initialRecurringSessions, initialMissedDays } from './initialData.js';
+
 
 function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -32,51 +35,21 @@ function App() {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [appId, setAppId] = useState(null);
 
+  const [programs, setPrograms] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [gyms, setGyms] = useState([]);
+  const [fixedSchedules, setFixedSchedules] = useState([]);
+  const [recurringSessions, setRecurringSessions] = useState([]);
+  const [scheduleOverrides, setScheduleOverrides] = useState([]);
+  const [missedDays, setMissedDays] = useState([]);
+
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  
-  // Estados para responsividad
-  const [isMobile, setIsMobile] = useState(false);
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false); // State to control auth modal visibility
 
-  // Hook para detectar el tamaño de pantalla
-  useEffect(() => {
-    const checkScreenSize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      if (!mobile) {
-        setShowMobileMenu(false);
-      }
-    };
-    
-    checkScreenSize();
-    window.addEventListener('resize', checkScreenSize);
-    
-    return () => window.removeEventListener('resize', checkScreenSize);
-  }, []);
 
-  // Definir elementos del menú con iconos
-  const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { id: 'programs', label: 'Programes', icon: '💪' },
-    { id: 'schedule', label: 'Calendari', icon: '📅' },
-    { id: 'users', label: 'Usuaris', icon: '👥' },
-    { id: 'mixes', label: 'Mixos', icon: '🥤' },
-    { id: 'gymsAndHolidays', label: 'Vacances', icon: '🏖️' },
-    { id: 'monthlyReport', label: 'Informe', icon: '📈' },
-    { id: 'settings', label: 'Configuració', icon: '⚙️' },
-  ];
-
-  const handlePageChange = (pageId) => {
-    setCurrentPage(pageId);
-    if (isMobile) {
-      setShowMobileMenu(false);
-    }
-  };
-
-  // Initialize Firebase and set up authentication
+  // Initialize Firebase and set up authentication and data listeners
   useEffect(() => {
     const initializeFirebase = async () => {
       try {
@@ -104,10 +77,18 @@ function App() {
           }
         }
         
+        // If firebaseConfig is empty or invalid, proceed with dummy data
         if (Object.keys(firebaseConfig).length === 0 || !firebaseConfig.projectId) {
           console.warn("Firebase config not found or invalid. Using dummy data for local development.");
+          setPrograms(initialPrograms);
+          setUsers(initialUsers);
+          setGyms(initialGyms);
+          setFixedSchedules(initialFixedSchedules);
+          setRecurringSessions(initialRecurringSessions);
+          setMissedDays(initialMissedDays);
           setIsFirebaseReady(true);
           setLoadingMessage('Dades locals carregades (sense connexió a Firebase).');
+          // No user ID needed for dummy data, so currentUserId remains null
           return;
         }
 
@@ -122,19 +103,114 @@ function App() {
 
         onAuthStateChanged(firebaseAuth, async (user) => {
           if (user) {
+            // User is signed in (anonymously or with email)
             setCurrentUserId(user.uid);
-            setShowAuthModal(false);
+            setShowAuthModal(false); // Hide auth modal if already signed in
             setLoadingMessage('Carregant dades del núvol...');
+            
+            // Path for user-specific collections, using the appId from env vars
+            const getUserCollectionPathForListeners = (collectionName) => {
+              return `artifacts/${envAppId}/users/${user.uid}/${collectionName}`;
+            };
+
+            // Setup real-time listeners for all collections
+            onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('programs')), (snapshot) => {
+              setPrograms(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }, (error) => console.error("Error fetching programs:", error));
+
+            onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('users')), (snapshot) => {
+              setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }, (error) => console.error("Error fetching users:", error));
+
+            onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('gyms')), (snapshot) => {
+              setGyms(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }, (error) => console.error("Error fetching gyms:", error));
+
+            onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('fixedSchedules')), (snapshot) => {
+              setFixedSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()));
+            }, (error) => console.error("Error fetching fixed schedules:", error));
+
+            onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('recurringSessions')), (snapshot) => {
+              setRecurringSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }, (error) => console.error("Error fetching recurring sessions:", error));
+
+            onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('scheduleOverrides')), (snapshot) => {
+              setScheduleOverrides(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }, (error) => console.error("Error fetching schedule overrides:", error));
+
+            onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('missedDays')), (snapshot) => {
+              setMissedDays(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }, (error) => console.error("Error fetching missed days:", error));
+
+            setIsFirebaseReady(true);
+            setLoadingMessage('Dades carregades amb èxit!');
+
+            // Initial data seeding if collections are empty (first run)
+            const checkAndSeedData = async () => {
+              const programsCollectionRef = collection(firestoreDb, getUserCollectionPathForListeners('programs'));
+              const programsSnap = await getDocs(programsCollectionRef);
+
+              if (programsSnap.empty) {
+                setLoadingMessage('Inicialitzant dades per primera vegada...');
+                try {
+                  // Seed initialPrograms
+                  for (const p of initialPrograms) {
+                    await setDoc(doc(firestoreDb, getUserCollectionPathForListeners('programs'), p.id), p);
+                  }
+                  // Seed initialUsers
+                  for (const u of initialUsers) {
+                    await setDoc(doc(firestoreDb, getUserCollectionPathForListeners('users'), u.id), u);
+                  }
+                  // Seed initialGyms
+                  for (const g of initialGyms) {
+                    await setDoc(doc(firestoreDb, getUserCollectionPathForListeners('gyms'), g.id), g);
+                  }
+                  // Seed initialFixedSchedules
+                  for (const fs of initialFixedSchedules) {
+                    await setDoc(doc(firestoreDb, getUserCollectionPathForListeners('fixedSchedules'), fs.id), fs);
+                  }
+                  // Seed initialRecurringSessions
+                  for (const rs of initialRecurringSessions) {
+                    await setDoc(doc(firestoreDb, getUserCollectionPathForListeners('recurringSessions'), rs.id), rs);
+                  }
+                  // Seed initialMissedDays
+                  for (const md of initialMissedDays) {
+                    await setDoc(doc(firestoreDb, getUserCollectionPathForListeners('missedDays'), md.id), md);
+                  }
+                  setLoadingMessage('Dades inicials creades!');
+                } catch (seedError) {
+                  console.error("Error seeding initial data:", seedError);
+                  setMessageModalContent({
+                    title: 'Error d\'Inicialització',
+                    message: `Hi ha hagut un error al crear les dades inicials: ${seedError.message}`,
+                    isConfirm: false,
+                    onConfirm: () => setShowMessageModal(false),
+                  });
+                  setShowMessageModal(true);
+                }
+              }
+            };
+            checkAndSeedData();
+
           } else {
+            // No user signed in, attempt anonymous or show auth modal
             if (initialAuthToken) {
               await signInWithCustomToken(firebaseAuth, initialAuthToken);
             } else {
-              setCurrentUserId(null);
+              // If no custom token and no user, show auth modal for persistent login
+              setCurrentUserId(null); // Clear user ID on logout
+              setPrograms([]); // Clear data
+              setUsers([]);
+              setGyms([]);
+              setFixedSchedules([]);
+              setRecurringSessions([]);
+              setScheduleOverrides([]);
+              setMissedDays([]);
               setShowAuthModal(true);
               setLoadingMessage('Inicia sessió o registra\'t per carregar les teves dades.');
             }
           }
-          setIsFirebaseReady(true);
+          setIsFirebaseReady(true); // Firebase auth state checked, ready to proceed
         });
 
       } catch (error) {
@@ -145,15 +221,7 @@ function App() {
     };
 
     initializeFirebase();
-  }, []);
-
-  const { programs, users, gyms, fixedSchedules, recurringSessions, scheduleOverrides, missedDays, setMissedDays, dataLoaded } = useFirestoreData(dbInstance, currentUserId, appId, isFirebaseReady, setLoadingMessage, setShowMessageModal, setMessageModalContent);
-
-  useEffect(() => {
-    if (isFirebaseReady && dataLoaded) {
-      setLoadingMessage('Dades carregades amb èxit!');
-    }
-  }, [isFirebaseReady, dataLoaded]);
+  }, []); // Run once on component mount
 
   const handleLogin = async (email, password) => {
     if (!authInstance) return;
@@ -221,7 +289,14 @@ function App() {
     if (!authInstance) return;
     try {
       await signOut(authInstance);
-      setCurrentUserId(null);
+      setCurrentUserId(null); // Clear user ID on logout
+      setPrograms([]); // Clear data
+      setUsers([]);
+      setGyms([]);
+      setFixedSchedules([]);
+      setRecurringSessions([]);
+      setScheduleOverrides([]);
+      setMissedDays([]);
       setLoadingMessage('Sessió tancada. Inicia sessió de nou.');
       setShowMessageModal(true);
       setMessageModalContent({
@@ -242,32 +317,48 @@ function App() {
     }
   };
 
+
   const renderPage = () => {
-    if (!isFirebaseReady) {
+    // Only show loading or auth modal if Firebase is not ready OR (Firebase is ready but no user is authenticated AND auth modal is active)
+    if (!isFirebaseReady || (isFirebaseReady && !currentUserId && showAuthModal)) {
+      if (!isFirebaseReady || (isFirebaseReady && !currentUserId && showAuthModal)) {
+        return <Auth onLogin={handleLogin} onRegister={handleRegister} />;
+      }
       return (
-        <div className="flex justify-center items-center min-h-[60vh] p-4">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-lg sm:text-xl text-gray-700">{loadingMessage}</p>
-          </div>
+        <div className="flex justify-center items-center min-h-[calc(100vh-100px)]">
+          <p className="text-xl text-gray-700">{loadingMessage}</p>
+        </div>
+      );
+    }
+    
+    // Once Firebase is ready and user is authenticated (currentUserId is set), render the actual content
+    // We also wait for initial data to be loaded before showing the main content
+    if (isFirebaseReady && !currentUserId && !showAuthModal) {
+      // This state implies Firebase is ready, but no user and auth modal is NOT forced.
+      // Could happen if initialAuthToken failed or no anonymous sign-in.
+      return (
+        <div className="flex justify-center items-center min-h-[calc(100vh-100px)]">
+          <p className="text-xl text-gray-700">Esperant autenticació...</p>
+          <button
+            onClick={() => setShowAuthModal(true)}
+            className="ml-4 bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
+          >
+            Iniciar Sessió / Registrar-se
+          </button>
+        </div>
+      );
+    }
+    
+    // Now we are sure currentUserId is available, proceed to check data loading status
+    if (currentUserId && (programs.length === 0 && users.length === 0 && gyms.length === 0 && fixedSchedules.length === 0 && recurringSessions.length === 0 && scheduleOverrides.length === 0 && missedDays.length === 0)) {
+      // If user is authenticated but data states are empty, assume data is still loading
+      return (
+        <div className="flex justify-center items-center min-h-[calc(100vh-100px)]">
+          <p className="text-xl text-gray-700">{loadingMessage}</p>
         </div>
       );
     }
 
-    if (showAuthModal && !currentUserId) {
-      return <Auth onLogin={handleLogin} onRegister={handleRegister} />;
-    }
-
-    if (!currentUserId || !dataLoaded) {
-      return (
-        <div className="flex justify-center items-center min-h-[60vh] p-4">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-lg sm:text-xl text-gray-700">{loadingMessage}</p>
-          </div>
-        </div>
-      );
-    }
 
     switch (currentPage) {
       case 'dashboard':
@@ -302,164 +393,52 @@ function App() {
     <div className="flex flex-col min-h-screen bg-gray-100 font-inter">
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-      {/* Navbar */}
-      <nav className="bg-gradient-to-r from-blue-600 to-blue-800 shadow-lg sticky top-0 z-50">
-        <div className="container mx-auto px-4">
-          {/* Header principal */}
-          <div className="flex justify-between items-center py-4">
-            {/* Logo y título */}
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">G</span>
-              </div>
-              <h1 className="text-white text-xl sm:text-2xl font-bold">Gym Instructor</h1>
-            </div>
-
-            {/* Botón hamburguesa para móvil */}
-            {isMobile && (
+      <nav className="bg-gradient-to-r from-blue-600 to-blue-800 p-4 shadow-lg">
+        <div className="container mx-auto flex justify-between items-center">
+          <h1 className="text-white text-2xl font-bold">Gym Instructor</h1>
+          {currentUserId ? (
+            <div className="flex items-center space-x-4">
+              <span className="text-white text-sm">
+                ID d'usuari: <span className="font-mono text-blue-200">{currentUserId}</span>
+              </span>
               <button
-                onClick={() => setShowMobileMenu(!showMobileMenu)}
-                className="text-white p-2 rounded-md hover:bg-white hover:bg-opacity-20 transition-colors"
-                aria-label="Toggle menu"
+                onClick={handleLogout}
+                className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth="2" 
-                    d={showMobileMenu ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"}
-                  />
-                </svg>
+                Tancar Sessió
               </button>
-            )}
-
-            {/* Información de usuario y logout para desktop */}
-            {!isMobile && currentUserId && (
-              <div className="flex items-center space-x-4">
-                <span className="text-white text-sm">
-                  ID: <span className="font-mono text-blue-200">{currentUserId.substring(0, 8)}...</span>
-                </span>
-                <button
-                  onClick={handleLogout}
-                  className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
-                >
-                  Tancar Sessió
-                </button>
-              </div>
-            )}
-
-            {/* Botón login para desktop cuando no hay usuario */}
-            {!isMobile && !currentUserId && (
-              <button
-                onClick={() => setShowAuthModal(true)}
-                className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
-              >
-                Iniciar Sessió
-              </button>
-            )}
-          </div>
-
-          {/* Menú de navegación para desktop */}
-          {!isMobile && currentUserId && (
-            <div className="border-t border-white border-opacity-20 py-3">
-              <div className="flex flex-wrap gap-2 sm:gap-4 justify-center">
-                {menuItems.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => handlePageChange(item.id)}
-                    className={`
-                      flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200
-                      ${currentPage === item.id
-                        ? 'bg-white bg-opacity-20 text-white'
-                        : 'text-blue-100 hover:text-white hover:bg-white hover:bg-opacity-10'
-                      }
-                    `}
-                  >
-                    <span className="text-sm">{item.icon}</span>
-                    <span className="hidden sm:inline">{item.label}</span>
-                  </button>
-                ))}
-              </div>
             </div>
+          ) : (
+            <button
+              onClick={() => setShowAuthModal(true)}
+              className="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
+            >
+              Iniciar Sessió / Registrar-se
+            </button>
           )}
-        </div>
-
-        {/* Menú móvil desplegable */}
-        {isMobile && showMobileMenu && (
-          <div className="border-t border-white border-opacity-20 bg-blue-700 bg-opacity-95">
-            <div className="container mx-auto px-4 py-4">
-              {/* Información del usuario en móvil */}
-              {currentUserId ? (
-                <>
-                  <div className="mb-4 pb-4 border-b border-white border-opacity-20">
-                    <div className="text-white text-sm mb-2">
-                      Usuario ID: <span className="font-mono text-blue-200">{currentUserId.substring(0, 12)}...</span>
-                    </div>
-                    <button
-                      onClick={handleLogout}
-                      className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm w-full"
-                    >
-                      Tancar Sessió
-                    </button>
-                  </div>
-                  
-                  {/* Items del menú en móvil */}
-                  <div className="space-y-2">
-                    {menuItems.map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => handlePageChange(item.id)}
-                        className={`
-                          w-full flex items-center space-x-3 px-3 py-3 rounded-md text-left transition-colors duration-200
-                          ${currentPage === item.id
-                            ? 'bg-white bg-opacity-20 text-white'
-                            : 'text-blue-100 hover:text-white hover:bg-white hover:bg-opacity-10'
-                          }
-                        `}
-                      >
-                        <span className="text-lg">{item.icon}</span>
-                        <span className="font-medium">{item.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <button
-                  onClick={() => {
-                    setShowAuthModal(true);
-                    setShowMobileMenu(false);
-                  }}
-                  className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm w-full"
-                >
-                  Iniciar Sessió / Registrar-se
-                </button>
-              )}
-            </div>
+          <div className="space-x-4">
+            <button onClick={() => setCurrentPage('dashboard')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Dashboard</button>
+            <button onClick={() => setCurrentPage('programs')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Programes</button>
+            <button onClick={() => setCurrentPage('schedule')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Calendari</button>
+            <button onClick={() => setCurrentPage('users')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Usuaris</button>
+            <button onClick={() => setCurrentPage('mixes')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Mixos</button>
+            <button onClick={() => setCurrentPage('gymsAndHolidays')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Vacances</button>
+            <button onClick={() => setCurrentPage('monthlyReport')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Informe Mensual</button>
+            <button onClick={() => setCurrentPage('settings')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Configuració</button>
           </div>
-        )}
+        </div>
       </nav>
 
-      {/* Overlay para cerrar el menú móvil */}
-      {isMobile && showMobileMenu && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-25 z-40"
-          onClick={() => setShowMobileMenu(false)}
-        />
-      )}
-
-      {/* Contenido principal */}
       <main className="flex-grow">
         {renderPage()}
       </main>
 
-      {/* Footer */}
       <footer className="bg-gray-800 text-white p-4 text-center text-sm">
         <div className="container mx-auto">
           © 2025 Gym Instructor App. Tots els drets reservats.
         </div>
       </footer>
 
-      {/* Modal de mensajes */}
       {showMessageModal && (
         <MessageModal
           show={showMessageModal}
