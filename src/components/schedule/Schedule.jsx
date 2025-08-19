@@ -18,39 +18,48 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
-  const daysOfWeek = ['Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte', 'Diumenge'];
+  // Versiones responsivas de los días de la semana
+  const daysOfWeekFull = ['Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte', 'Diumenge'];
+  const daysOfWeekShort = ['Dl', 'Dt', 'Dc', 'Dj', 'Dv', 'Ds', 'Dg'];
+
+  // Hook para detectar el tamaño de pantalla
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
 
   useEffect(() => {
-    // This effect ensures the calendar re-renders if its underlying data or month changes.
-    // The renderCalendar function is called directly in JSX, so it will react to state changes.
+    // Force re-render of calendar implicitly by changing a state if needed,
+    // or rely on component re-render when props change.
   }, [fixedSchedules, recurringSessions, scheduleOverrides, missedDays, programs, gyms, currentMonth]);
 
-
   const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
-  
-  // Calculates the day of the week for the first day of the month.
-  // new Date(year, month, 1).getDay() returns 0 for Sunday, 1 for Monday... 6 for Saturday.
-  // We adjust it to make Monday=0, Tuesday=1, ..., Sunday=6 for our display.
-  const firstDayOfMonth = (year, month) => {
-    const day = new Date(year, month, 1).getDay();
-    // If it's Sunday (0), we want it to be index 6 (last day of our week array).
-    // Otherwise, subtract 1 to align with Monday=0.
-    return (day === 0) ? 6 : day - 1; 
-  };
+  const firstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 
   const renderCalendar = () => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     const numDays = daysInMonth(year, month);
-    const startingDay = firstDayOfMonth(year, month); // This will now correctly be 0 for Monday, 1 for Tuesday, etc.
+    const firstDay = firstDayOfMonth(year, month);
+    const startingDay = (firstDay === 0 ? 6 : firstDay - 1);
 
     const calendarDays = [];
-    // Add empty cells (placeholders) for days before the 1st of the month
+    
+    // Add empty cells for days before the 1st of the month
     for (let i = 0; i < startingDay; i++) {
-      calendarDays.push(<div key={`empty-${i}`} className="p-2 border border-gray-200 rounded-md bg-gray-100"></div>);
+      calendarDays.push(
+        <div key={`empty-${i}`} className="aspect-square border border-gray-200 rounded-md bg-gray-100"></div>
+      );
     }
 
-    // Add actual day cells
     for (let day = 1; day <= numDays; day++) {
       const date = new Date(year, month, day);
       const dateString = getLocalDateString(date);
@@ -58,7 +67,7 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
       const missed = missedDays.find(md => md.date === dateString);
       const isHoliday = gyms.some(gym => gym.holidaysTaken.includes(dateString));
 
-      let dayClasses = "p-2 border border-gray-200 rounded-md flex flex-col justify-between cursor-pointer transition-colors duration-200 min-h-[120px] sm:min-h-[140px] "; // Increased min-height for better spacing
+      let dayClasses = "aspect-square border border-gray-200 rounded-md flex flex-col cursor-pointer transition-colors duration-200 relative overflow-hidden ";
       if (isToday) dayClasses += "bg-blue-200 border-blue-500 ";
       else dayClasses += "bg-white hover:bg-gray-50 ";
 
@@ -66,9 +75,9 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
       const override = scheduleOverrides.find(so => so.date === dateString);
 
       if (missed) {
-        sessionsForCalendarDay.push({ type: 'missed', label: 'LLIURE', color: '#EF4444' }); // Red for missed
+        sessionsForCalendarDay.push({ type: 'missed', label: 'LLIURE', color: '#EF4444' });
       } else if (isHoliday) {
-        sessionsForCalendarDay.push({ type: 'holiday', label: 'VACANCES', color: '#60A5FA' }); // Blue for holidays
+        sessionsForCalendarDay.push({ type: 'holiday', label: 'VACANCES', color: '#60A5FA' });
       } else if (override) {
         sessionsForCalendarDay = override.sessions.map(s => {
           const program = programs.find(p => p.id === s.programId);
@@ -110,15 +119,29 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
         }
       }
 
-      calendarDays.push(
+      return (
         <div key={dateString} className={dayClasses} onClick={() => handleDayClick(date)}>
-          <div className="font-semibold text-gray-800 text-right">{day}</div>
-          <div className="flex flex-wrap gap-1 mt-1">
-            {sessionsForCalendarDay.map((session, idx) => (
-              <span key={idx} className="text-xs px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: session.color }}>
-                {session.label}
+          <div className={`font-semibold text-gray-800 p-1 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+            {day}
+          </div>
+          <div className="flex-1 flex flex-col gap-0.5 p-1 overflow-hidden">
+            {sessionsForCalendarDay.slice(0, isMobile ? 2 : 3).map((session, idx) => (
+              <span 
+                key={idx} 
+                className={`text-white rounded truncate text-center leading-tight ${
+                  isMobile ? 'text-[10px] px-1 py-0.5' : 'text-xs px-1 py-0.5'
+                }`}
+                style={{ backgroundColor: session.color }}
+                title={session.label}
+              >
+                {isMobile && session.label.length > 6 ? session.label.substring(0, 6) : session.label}
               </span>
             ))}
+            {sessionsForCalendarDay.length > (isMobile ? 2 : 3) && (
+              <span className={`text-gray-500 text-center ${isMobile ? 'text-[10px]' : 'text-xs'}`}>
+                +{sessionsForCalendarDay.length - (isMobile ? 2 : 3)}
+              </span>
+            )}
           </div>
         </div>
       );
@@ -139,12 +162,10 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
     const dateString = getLocalDateString(date);
     const dayName = date.toLocaleDateString('ca-ES', { weekday: 'long' });
     
-    // Check for an existing override for this date
     const existingOverride = scheduleOverrides.find(so => so.date === dateString);
     if (existingOverride) {
       setSessionsForDay(existingOverride.sessions.map((s, index) => ({ id: `${dateString}-${index}`, ...s })));
     } else {
-      // If no override, populate with active fixed schedule or recurring sessions
       const activeFixedSchedule = getActiveFixedSchedule(date, fixedSchedules);
       let defaultSessions = [];
 
@@ -155,8 +176,8 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
           const sessionStartDate = normalizeDateToStartOfDay(new Date(session.startDate));
           const sessionEndDate = session.endDate ? normalizeDateToStartOfDay(new Date(session.endDate)) : null;
           return session.daysOfWeek.includes(dayName) &&
-                   date >= sessionStartDate &&
-                   (!sessionEndDate || date <= sessionEndDate);
+                 date >= sessionStartDate &&
+                 (!sessionEndDate || date <= sessionEndDate);
         });
         defaultSessions = recurringSessionsForDay.map((s, index) => ({ id: `${dateString}-${index}`, programId: s.programId, time: s.time, gymId: s.gymId, notes: s.notes || '' }));
       }
@@ -202,8 +223,6 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
     
     if (!scheduleOverridesPath || !programsCollectionPath) return;
 
-
-    // Validar sessions
     for (const session of sessionsForDay) {
       if (!session.programId || !session.time || !session.gymId) {
         setMessageModalContent({
@@ -221,7 +240,7 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
       const overrideRef = doc(db, scheduleOverridesPath, dateStr);
 
       if (sessionsForDay.length > 0) {
-        const sessionsToSave = sessionsForDay.map(({ id, ...rest }) => rest); // Remove temporary 'id'
+        const sessionsToSave = sessionsForDay.map(({ id, ...rest }) => rest);
         await setDoc(overrideRef, { date: dateStr, sessions: sessionsToSave }, { merge: false });
         setMessageModalContent({
             title: 'Sessions Guardades',
@@ -231,7 +250,6 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
           });
           setShowMessageModal(true);
       } else {
-        // If no sessions, delete the override if it exists
         const docSnap = await getDoc(overrideRef);
         if (docSnap.exists()) {
           await deleteDoc(overrideRef);
@@ -243,23 +261,19 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
           });
           setShowMessageModal(true);
         } else {
-            // No sessions to save, and no override to delete, so just close
             setShowSessionModal(false);
             return;
         }
       }
 
-      // Update program history (sessions array in programs collection)
       const programsCollectionRef = collection(db, programsCollectionPath);
       const allProgramsSnapshot = await getDocs(programsCollectionRef);
       const currentProgramsData = allProgramsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
       for (const p of currentProgramsData) {
         const programRef = doc(db, programsCollectionPath, p.id);
-        // Filter out any existing sessions for this specific date
         const updatedSessions = p.sessions.filter(s => normalizeDateToStartOfDay(new Date(s.date)).getTime() !== dateNormalized.getTime());
         
-        // Add new/updated sessions for this program and date
         sessionsForDay.forEach(session => {
           if (session.programId === p.id) {
             updatedSessions.push({ date: dateStr, notes: session.notes || '' });
@@ -341,107 +355,134 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
   };
 
   return (
-    <div className="p-4 sm:p-6 bg-gray-50 min-h-screen font-inter">
-      <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4 sm:mb-6">Calendari</h1>
+    <div className="min-h-screen bg-gray-50 font-inter">
+      <div className="p-4 sm:p-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4 sm:mb-6">Calendari</h1>
 
-      <div className="flex flex-col sm:flex-row justify-between items-center mb-4 sm:mb-6 space-y-2 sm:space-y-0">
-        <button
-          onClick={() => handleMonthChange(-1)}
-          className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out w-full sm:w-auto"
-        >
-          Anterior
-        </button>
-        <span className="text-xl sm:text-2xl font-semibold text-gray-700">
-          {currentMonth.toLocaleDateString('ca-ES', { month: 'long', year: 'numeric' })}
-        </span>
-        <button
-          onClick={() => handleMonthChange(1)}
-          className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out w-full sm:w-auto"
-        >
-          Següent
-        </button>
-      </div>
+        {/* Header con navegación del mes */}
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-4 sm:mb-6 gap-4">
+          <button
+            onClick={() => handleMonthChange(-1)}
+            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out w-full sm:w-auto"
+          >
+            Anterior
+          </button>
+          <span className="text-xl sm:text-2xl font-semibold text-gray-700 text-center">
+            {currentMonth.toLocaleDateString('ca-ES', { month: 'long', year: 'numeric' })}
+          </span>
+          <button
+            onClick={() => handleMonthChange(1)}
+            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out w-full sm:w-auto"
+          >
+            Següent
+          </button>
+        </div>
 
-      <div className="grid grid-cols-7 text-center text-xs sm:text-sm font-medium text-gray-600 mb-2">
-        {daysOfWeek.map(day => <div key={day} className="py-1 sm:py-2">{day}</div>)}
-      </div>
+        {/* Headers de los días */}
+        <div className="grid grid-cols-7 text-center text-xs sm:text-sm font-medium text-gray-600 mb-2 sm:mb-4">
+          {(isMobile ? daysOfWeekShort : daysOfWeekFull).map(day => (
+            <div key={day} className="py-2">{day}</div>
+          ))}
+        </div>
 
-      <div className="grid grid-cols-7 gap-1 sm:gap-2">
-        {renderCalendar()}
+        {/* Grid del calendario */}
+        <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-4">
+          {renderCalendar()}
+        </div>
       </div>
 
       {/* Session Management Modal */}
       {showSessionModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-4 sm:p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-4">Gestionar Sessions per al {getLocalDateString(selectedDate)}</h2>
-            {sessionsForDay.length === 0 && (
-              <p className="text-gray-600 text-sm mb-4">No hi ha sessions programades per defecte o anul·lades per a aquest dia.</p>
-            )}
-            <div className="space-y-3 sm:space-y-4">
-              {sessionsForDay.map(session => (
-                <div key={session.id} className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2 bg-gray-50 p-3 rounded-lg shadow-sm">
-                  <select
-                    className="shadow border rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:flex-1 text-sm"
-                    value={session.programId}
-                    onChange={(e) => handleUpdateSessionInDay(session.id, 'programId', e.target.value)}
-                  >
-                    <option value="">Selecciona Programa</option>
-                    {programs.map(program => (
-                      <option key={program.id} value={program.id}>{program.name}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="time"
-                    className="shadow border rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-24 text-sm"
-                    value={session.time}
-                    onChange={(e) => handleUpdateSessionInDay(session.id, 'time', e.target.value)}
-                  />
-                  <select
-                    className="shadow border rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:flex-1 text-sm"
-                    value={session.gymId}
-                    onChange={(e) => handleUpdateSessionInDay(session.id, 'gymId', e.target.value)}
-                  >
-                    <option value="">Selecciona Gimnàs</option>
-                    {gyms.map(gym => (
-                      <option key={gym.id} value={gym.id}>{gym.name}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    className="shadow border rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:flex-1 text-sm"
-                    placeholder="Notes (opcional)"
-                    value={session.notes || ''}
-                    onChange={(e) => handleUpdateSessionInDay(session.id, 'notes', e.target.value)}
-                  />
-                  <button
-                    onClick={() => handleDeleteSessionFromDay(session.id)}
-                    className="bg-red-500 hover:bg-red-600 text-white font-bold p-2 rounded-lg transition duration-300 ease-in-out text-sm flex-shrink-0"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 fill-current" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm2.46-7.12l1.41-1.41L12 12.17l2.12-2.12 1.41 1.41L13.41 13.5l2.12 2.12-1.41 1.41L12 14.83l-2.12 2.12-1.41-1.41L10.59 13.5l-2.13-2.12zM15.5 4l-1-1h-5l-1 1H5v2h14V4h-3.5z"/></svg>
-                  </button>
-                </div>
-              ))}
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 sm:p-6 border-b">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-800">
+                Gestionar Sessions per al {getLocalDateString(selectedDate)}
+              </h2>
             </div>
-            <button
-              onClick={handleAddSessionToDay}
-              className="mt-4 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm sm:text-base"
-            >
-              Afegir Sessió
-            </button>
-            <div className="flex justify-end space-x-2 sm:space-x-4 mt-6">
+            
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+              {sessionsForDay.length === 0 && (
+                <p className="text-gray-600 mb-4">No hi ha sessions programades per defecte o anul·lades per a aquest dia.</p>
+              )}
+              
+              <div className="space-y-4">
+                {sessionsForDay.map(session => (
+                  <div key={session.id} className="bg-gray-50 p-3 sm:p-4 rounded-lg shadow-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                      <select
+                        className="shadow border rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        value={session.programId}
+                        onChange={(e) => handleUpdateSessionInDay(session.id, 'programId', e.target.value)}
+                      >
+                        <option value="">Selecciona Programa</option>
+                        {programs.map(program => (
+                          <option key={program.id} value={program.id}>{program.name}</option>
+                        ))}
+                      </select>
+                      
+                      <input
+                        type="time"
+                        className="shadow border rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        value={session.time}
+                        onChange={(e) => handleUpdateSessionInDay(session.id, 'time', e.target.value)}
+                      />
+                      
+                      <select
+                        className="shadow border rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        value={session.gymId}
+                        onChange={(e) => handleUpdateSessionInDay(session.id, 'gymId', e.target.value)}
+                      >
+                        <option value="">Selecciona Gimnàs</option>
+                        {gyms.map(gym => (
+                          <option key={gym.id} value={gym.id}>{gym.name}</option>
+                        ))}
+                      </select>
+                      
+                      <input
+                        type="text"
+                        className="shadow border rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        placeholder="Notes (opcional)"
+                        value={session.notes || ''}
+                        onChange={(e) => handleUpdateSessionInDay(session.id, 'notes', e.target.value)}
+                      />
+                      
+                      <button
+                        onClick={() => handleDeleteSessionFromDay(session.id)}
+                        className="bg-red-500 hover:bg-red-600 text-white font-bold p-2 rounded-lg transition duration-300 ease-in-out flex items-center justify-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 fill-current" viewBox="0 0 24 24">
+                          <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm2.46-7.12l1.41-1.41L12 12.17l2.12-2.12 1.41 1.41L13.41 13.5l2.12 2.12-1.41 1.41L12 14.83l-2.12 2.12-1.41-1.41L10.59 13.5l-2.13-2.12zM15.5 4l-1-1h-5l-1 1H5v2h14V4h-3.5z"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
               <button
-                onClick={() => setShowSessionModal(false)}
-                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm sm:text-base"
+                onClick={handleAddSessionToDay}
+                className="mt-4 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out w-full sm:w-auto"
               >
-                Cancel·lar
+                Afegir Sessió
               </button>
-              <button
-                onClick={handleSaveDaySessions}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm sm:text-base"
-              >
-                Guardar Sessions
-              </button>
+            </div>
+            
+            <div className="p-4 sm:p-6 border-t">
+              <div className="flex flex-col sm:flex-row justify-end gap-3">
+                <button
+                  onClick={() => setShowSessionModal(false)}
+                  className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+                >
+                  Cancel·lar
+                </button>
+                <button
+                  onClick={handleSaveDaySessions}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+                >
+                  Guardar Sessions
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -450,57 +491,65 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
       {/* Missed Day Modal */}
       {showMissedDayModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-4 sm:p-6 rounded-lg shadow-xl w-full max-w-md">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-4">Marcar Dia com a No Assistit</h2>
-            <div className="mb-4">
-              <label htmlFor="missedDayDate" className="block text-gray-700 text-sm font-bold mb-2">Data:</label>
-              <input
-                type="date"
-                id="missedDayDate"
-                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                value={missedDaySelectedDate}
-                onChange={(e) => setMissedDaySelectedDate(e.target.value)}
-                readOnly
-              />
-            </div>
-            <div className="mb-4">
-              <label htmlFor="missedDayGym" className="block text-gray-700 text-sm font-bold mb-2">Gimnàs Afectat:</label>
-              <select
-                id="missedDayGym"
-                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                value={missedDaySelectedGymId}
-                onChange={(e) => setMissedDaySelectedGymId(e.target.value)}
-              >
-                <option value="">Selecciona un gimnàs</option>
-                {gyms.map(gym => (
-                  <option key={gym.id} value={gym.id}>{gym.name}</option>
-                ))}
-                <option value="all_gyms">Tots els gimnasos</option>
-              </select>
-            </div>
-            <div className="mb-4">
-              <label htmlFor="missedDayNotes" className="block text-gray-700 text-sm font-bold mb-2">Notes (Motiu, opcional):</label>
-              <textarea
-                id="missedDayNotes"
-                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                value={missedDayNotes}
-                onChange={(e) => setMissedDayNotes(e.target.value)}
-                rows="3"
-              ></textarea>
-            </div>
-            <div className="flex justify-end space-x-2 sm:space-x-4 mt-6">
-              <button
-                onClick={() => setShowMissedDayModal(false)}
-                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm sm:text-base"
-              >
-                Cancel·lar
-              </button>
-              <button
-                onClick={handleAddMissedDay}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm sm:text-base"
-              >
-                Marcar com a No Assistit
-              </button>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div className="p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-4">Marcar Dia com a No Assistit</h2>
+              
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="missedDayDate" className="block text-gray-700 text-sm font-bold mb-2">Data:</label>
+                  <input
+                    type="date"
+                    id="missedDayDate"
+                    className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={missedDaySelectedDate}
+                    onChange={(e) => setMissedDaySelectedDate(e.target.value)}
+                    readOnly
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="missedDayGym" className="block text-gray-700 text-sm font-bold mb-2">Gimnàs Afectat:</label>
+                  <select
+                    id="missedDayGym"
+                    className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={missedDaySelectedGymId}
+                    onChange={(e) => setMissedDaySelectedGymId(e.target.value)}
+                  >
+                    <option value="">Selecciona un gimnàs</option>
+                    {gyms.map(gym => (
+                      <option key={gym.id} value={gym.id}>{gym.name}</option>
+                    ))}
+                    <option value="all_gyms">Tots els gimnasos</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label htmlFor="missedDayNotes" className="block text-gray-700 text-sm font-bold mb-2">Notes (Motiu, opcional):</label>
+                  <textarea
+                    id="missedDayNotes"
+                    className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={missedDayNotes}
+                    onChange={(e) => setMissedDayNotes(e.target.value)}
+                    rows="3"
+                  ></textarea>
+                </div>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row justify-end gap-3 mt-6">
+                <button
+                  onClick={() => setShowMissedDayModal(false)}
+                  className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+                >
+                  Cancel·lar
+                </button>
+                <button
+                  onClick={handleAddMissedDay}
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+                >
+                  Marcar com a No Assistit
+                </button>
+              </div>
             </div>
           </div>
         </div>
