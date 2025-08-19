@@ -335,7 +335,7 @@ const ProgramDetail = ({ program, setCurrentPage, db, currentUserId, appId }) =>
                       className={`p-2 rounded-full transition duration-200 ${track.isFavorite ? 'text-yellow-500 hover:text-yellow-600' : 'text-gray-400 hover:text-yellow-500'}`}
                       title={track.isFavorite ? 'Treure de Favorits' : 'Afegir a Favorits'}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"/><path d="M12 6.5l-2.031 4.125-4.569.664 3.308 3.227-.781 4.546L12 17.203l4.073 2.146-.781-4.546 3.308-3.227-4.569-.664L12 6.5z"/></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 fill-current" viewBox="0 0 24 24"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.817 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.538 1.118l-2.817-2.034a1 1 0 00-1.176 0l-2.817 2.034c-.783.57-1.838-.197-1.538-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.381-1.81.588-1.81h3.462a1 1 0 00.95-.69l1.07-3.292z"></path></svg>
                     </button>
                     <button
                       onClick={() => handleEditTrack(track)}
@@ -380,7 +380,7 @@ const ProgramDetail = ({ program, setCurrentPage, db, currentUserId, appId }) =>
       {/* Add/Edit Track Modal */}
       {showAddTrackModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto"> {/* Added max-h and overflow */}
             <h2 className="text-xl font-bold text-gray-800 mb-4">{editingTrack ? 'Editar Track' : 'Afegir Nou Track'}</h2>
             <div className="mb-4">
               <label htmlFor="trackName" className="block text-gray-700 text-sm font-bold mb-2">Nom del Track:</label>
@@ -434,7 +434,7 @@ const ProgramDetail = ({ program, setCurrentPage, db, currentUserId, appId }) =>
       {/* Add Session Modal */}
       {showAddSessionModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto"> {/* Added max-h and overflow */}
             <h2 className="text-xl font-bold text-gray-800 mb-4">Registrar Nova Sessió per {program.name}</h2>
             <div className="mb-4">
               <label htmlFor="sessionDate" className="block text-gray-700 text-sm font-bold mb-2">Data de la Sessió:</label>
