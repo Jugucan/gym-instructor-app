@@ -52,3 +52,15 @@ export const parseDateString = (dateString) => {
   }
   return null;
 };
+
+/**
+ * Normalizes a Date object to the start of the day (00:00:00.000).
+ * This is useful for consistent date comparisons, especially with Firestore timestamps.
+ * @param {Date} date - The date object to normalize.
+ * @returns {Date} A new Date object normalized to the start of the day.
+ */
+export const normalizeDateToStartOfDay = (date) => {
+  const newDate = new Date(date);
+  newDate.setHours(0, 0, 0, 0);
+  return newDate;
+};
