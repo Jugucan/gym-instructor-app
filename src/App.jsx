@@ -1,16 +1,10 @@
 // src/App.jsx
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Dashboard from './components/dashboard/Dashboard';
-import ProfilePage from './components/profile/ProfilePage';
-import ClientsPage from './components/clients/ClientsPage';
-import RoutinesPage from './components/routines/RoutinesPage';
-import CreateRoutinePage from './components/routines/CreateRoutinePage';
-import ClientDetail from './components/clients/ClientDetail'; // Importa ClientDetail
-import RoutineDetail from './components/routines/RoutineDetail'; // Importa RoutineDetail
-import { AuthProvider, useAuth } from './contexts/AuthContext'; // <--- Importa AuthProvider i useAuth
+import Dashboard from './components/dashboard/Dashboard'; // Només importem Dashboard
+import { AuthProvider, useAuth } from './contexts/AuthContext'; // Importem AuthProvider i useAuth
 
-// Layout del router amb comprovació d'autenticació
+// Component de rutes principal
 const AppRoutes = () => {
     const { currentUser, loading } = useAuth(); // Utilitza useAuth aquí
 
@@ -20,22 +14,14 @@ const AppRoutes = () => {
 
     return (
         <Routes>
-            {/* Rutes públiques o sense autenticació */}
-            <Route path="/" element={currentUser ? <Navigate to="/dashboard" /> : <LoginPrompt />} /> {/* Redirigeix si ja està autenticat */}
-
-            {/* Rutes protegides (requereixen autenticació) */}
+            {/* Si hi ha usuari, el portem directament al Dashboard. Si no, al prompt d'inici de sessió. */}
+            <Route path="/" element={currentUser ? <Navigate to="/dashboard" /> : <LoginPrompt />} />
+            {/* Ruta protegida per al Dashboard */}
             {currentUser ? (
-                <>
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/profile" element={<ProfilePage />} />
-                    <Route path="/clients" element={<ClientsPage />} />
-                    <Route path="/clients/:clientId" element={<ClientDetail />} /> {/* Ruta per detalls del client */}
-                    <Route path="/routines" element={<RoutinesPage />} />
-                    <Route path="/routines/:routineId" element={<RoutineDetail />} /> {/* Ruta per detalls de la rutina */}
-                    <Route path="/create-routine" element={<CreateRoutinePage />} />
-                </>
+                <Route path="/dashboard" element={<Dashboard />} />
             ) : (
-                <Route path="*" element={<Navigate to="/" replace />} /> // Redirigeix a la pàgina d'inici si no està autenticat
+                // Si no hi ha usuari i intenta accedir a qualsevol altra ruta, el redirigim a la pàgina d'inici de sessió.
+                <Route path="*" element={<Navigate to="/" replace />} /> 
             )}
         </Routes>
     );
@@ -74,7 +60,6 @@ const LoginPrompt = () => {
         </div>
     );
 };
-
 
 const App = () => {
     return (
