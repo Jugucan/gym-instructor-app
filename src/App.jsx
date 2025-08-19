@@ -147,10 +147,19 @@ function App() {
 
             // Initial data seeding if collections are empty (first run)
             const checkAndSeedData = async () => {
-              const programsCollectionRef = collection(firestoreDb, getUserCollectionPathForListeners('programs'));
-              const programsSnap = await getDocs(programsCollectionRef);
+              // Check *all* relevant collections before seeding to avoid over-seeding
+              const collectionsToCheck = ['programs', 'users', 'gyms', 'fixedSchedules', 'recurringSessions', 'missedDays'];
+              let allCollectionsEmpty = true;
+              for (const collectionName of collectionsToCheck) {
+                const collectionRef = collection(firestoreDb, getUserCollectionPathForListeners(collectionName));
+                const snap = await getDocs(collectionRef);
+                if (!snap.empty) {
+                  allCollectionsEmpty = false;
+                  break; // If any collection has data, don't seed all
+                }
+              }
 
-              if (programsSnap.empty) {
+              if (allCollectionsEmpty) { // Only seed if *all* relevant collections are empty
                 setLoadingMessage('Inicialitzant dades per primera vegada...');
                 try {
                   // Seed initialPrograms
@@ -333,23 +342,6 @@ function App() {
     
     // Once Firebase is ready and user is authenticated (currentUserId is set), render the actual content
     // We also wait for initial data to be loaded before showing the main content
-    if (isFirebaseReady && !currentUserId && !showAuthModal) {
-      // This state implies Firebase is ready, but no user and auth modal is NOT forced.
-      // Could happen if initialAuthToken failed or no anonymous sign-in.
-      return (
-        <div className="flex justify-center items-center min-h-[calc(100vh-100px)]">
-          <p className="text-xl text-gray-700">Esperant autenticació...</p>
-          <button
-            onClick={() => setShowAuthModal(true)}
-            className="ml-4 bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
-          >
-            Iniciar Sessió / Registrar-se
-          </button>
-        </div>
-      );
-    }
-    
-    // Now we are sure currentUserId is available, proceed to check data loading status
     if (currentUserId && (programs.length === 0 && users.length === 0 && gyms.length === 0 && fixedSchedules.length === 0 && recurringSessions.length === 0 && scheduleOverrides.length === 0 && missedDays.length === 0)) {
       // If user is authenticated but data states are empty, assume data is still loading
       return (
