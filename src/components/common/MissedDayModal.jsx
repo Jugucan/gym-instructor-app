@@ -1,5 +1,3 @@
-// src/components/common/MissedDayModal.jsx
-
 import React, { useState, useEffect } from 'react';
 import { getLocalDateString } from '../../utils/dateHelpers.jsx';
 
@@ -18,6 +16,10 @@ export const MissedDayModal = ({
   const [gymId, setGymId] = useState('');
   const [notes, setNotes] = useState('');
 
+  // No need for MessageModal state here, as it's handled by parent components or global context
+  // const [showMessageModal, setShowMessageModal] = useState(false);
+  // const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
+
   useEffect(() => {
     if (show) {
       setGymId(existingMissedGymId || '');
@@ -30,7 +32,8 @@ export const MissedDayModal = ({
   const handleSaveClick = () => {
     if (!gymId) {
       // You might want to add a message modal here if a gym is mandatory
-      alert('Si us plau, selecciona un gimnàs.');
+      // For now, let's just log or notify the user in a non-blocking way
+      console.warn('Please select a gym before saving.');
       return;
     }
     onSave({ date: getLocalDateString(date), gymId, notes });
@@ -38,7 +41,7 @@ export const MissedDayModal = ({
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex justify-center items-center p-4 z-50 font-inter">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 max-h-[80vh] overflow-y-auto"> {/* Added max-h and overflow */}
         <h2 className="text-xl font-bold text-gray-800 mb-4">
           {isAlreadyMissed ? 'Editar Dia No Assistit' : 'Marcar Dia No Assistit'}
         </h2>
@@ -54,13 +57,13 @@ export const MissedDayModal = ({
             id="gymSelect"
             value={gymId}
             onChange={(e) => setGymId(e.target.value)}
-            className="shadow border rounded-lg w-full py-2 px-3 text-gray-900 leading-tight focus:outline-none focus:shadow-outline bg-white"
+            className="shadow border rounded-lg w-full py-2 px-3 text-gray-900 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
             <option value="">Selecciona un gimnàs</option>
             {gyms.map(gym => (
               <option key={gym.id} value={gym.id}>{gym.name}</option>
             ))}
-            <option value="all">Tots els gimnasos (No assistit a cap)</option>
+            <option value="all_gyms">Tots els gimnasos (No assistit a cap)</option>
           </select>
         </div>
 
@@ -73,7 +76,7 @@ export const MissedDayModal = ({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows="3"
-            className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-900 leading-tight focus:outline-none focus:shadow-outline bg-white"
+            className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-900 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             placeholder="Afegeix una nota sobre el dia no assistit..."
           ></textarea>
         </div>
