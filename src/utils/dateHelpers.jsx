@@ -1,52 +1,54 @@
-// dateHelpers.jsx
-// Utility functions for date formatting and manipulation.
+// src/utils/dateHelpers.jsx
 
 /**
- * Formats a date string (YYYY-MM-DD) or Date object into a more readable format (e.g., DD/MM/YYYY).
- * @param {string|Date} dateInput The date string (e.g., '2024-03-15') or Date object.
- * @returns {string} Formatted date string (e.g., '15/03/2024') or 'N/A' if invalid.
- */
-export const formatDate = (dateInput) => {
-    if (!dateInput) return 'N/A';
-    try {
-        const date = new Date(dateInput);
-        if (isNaN(date.getTime())) {
-            return 'N/A'; // Invalid date
-        }
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
-        const year = date.getFullYear();
-        return `${day}/${month}/${year}`;
-    } catch (error) {
-        console.error("Error formatting date:", error);
-        return 'N/A';
-    }
-};
-
-/**
- * Normalizes a Date object or date string to the start of the day (00:00:00.000 local time).
- * This is useful for consistent date comparisons, ignoring time components.
- * @param {string|Date} dateInput The date string (e.g., '2024-03-15') or Date object.
- * @returns {Date} A new Date object set to the start of the day.
- */
-export const normalizeDateToStartOfDay = (dateInput) => {
-    const date = new Date(dateInput);
-    date.setHours(0, 0, 0, 0);
-    return date;
-};
-
-/**
- * Gets the local date string in YYYY-MM-DD format from a Date object.
- * Ensures timezone doesn't shift the date.
- * @param {Date} date The Date object.
- * @returns {string} The date in YYYY-MM-DD format.
+ * Formats a Date object into a localized date string (e.g., "DD/MM/YYYY" for ES-ES locale).
+ * Handles invalid Date objects gracefully.
+ * @param {Date} date - The date object to format.
+ * @returns {string} The formatted date string, or an empty string if the date is invalid.
  */
 export const getLocalDateString = (date) => {
-    if (!date instanceof Date || isNaN(date.getTime())) {
-        return '';
-    }
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+  if (!(date instanceof Date) || isNaN(date.getTime())) { // Use getTime() to check for valid date object
+    console.error("Invalid date provided to getLocalDateString:", date);
+    return ""; // Or some default value like 'N/A'
+  }
+  return date.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+};
+
+/**
+ * Formats a Date object into a YYYY-MM-DD string.
+ * This format is often useful for input fields or a more standard date representation.
+ * Handles invalid Date objects gracefully.
+ * @param {Date} date - The date object to format.
+ * @returns {string} The formatted date string (YYYY-MM-DD), or an empty string if the date is invalid.
+ */
+export const formatDate = (date) => {
+  if (!(date instanceof Date) || isNaN(date.getTime())) { // Use getTime() to check for valid date object
+    console.error("Invalid date provided to formatDate:", date);
+    return "";
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/**
+ * Parses a YYYY-MM-DD string into a Date object.
+ * @param {string} dateString - The date string in YYYY-MM-DD format.
+ * @returns {Date | null} The Date object, or null if the string is invalid.
+ */
+export const parseDateString = (dateString) => {
+  if (!dateString) return null;
+  const [year, month, day] = dateString.split('-').map(Number);
+  // Month is 0-indexed in Date constructor
+  const date = new Date(year, month - 1, day);
+  // Check if the parsed date is valid and corresponds to the input string to prevent invalid dates like Feb 30
+  if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) {
+    return date;
+  }
+  return null;
 };
