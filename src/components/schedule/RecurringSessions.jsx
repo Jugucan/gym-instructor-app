@@ -202,7 +202,7 @@ const RecurringSessions = ({ recurringSessions, programs, gyms, db, currentUserI
 
       {showModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto"> {/* Added max-h and overflow */}
             <h2 className="text-xl font-bold text-gray-800 mb-4">{editingSession ? 'Editar Sessió Recurrent' : 'Afegir Nova Sessió Recurrent'}</h2>
             <div className="mb-4">
               <label htmlFor="program" className="block text-gray-700 text-sm font-bold mb-2">Programa:</label>
