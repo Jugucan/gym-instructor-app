@@ -174,8 +174,7 @@ function App() {
             <button onClick={() => setCurrentPage('programs')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Programes</button>
             <button onClick={() => setCurrentPage('schedule')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Calendari</button>
             <button onClick={() => setCurrentPage('users')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Usuaris</button>
-            <button onClick={() => setCurrentPage('mixes')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Mixos</button>
-            <button onClick={() => setCurrentPage('gymsAndHolidays')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Vacances</button>
+            <button onClick={() => setCurrentPage('mixes')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Vacances</button>
             <button onClick={() => setCurrentPage('monthlyReport')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Informe Mensual</button>
             <button onClick={() => setCurrentPage('settings')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Configuració</button>
           </div>
