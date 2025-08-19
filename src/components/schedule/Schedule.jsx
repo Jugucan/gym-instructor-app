@@ -21,20 +21,20 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
   const daysOfWeek = ['Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte', 'Diumenge'];
 
   useEffect(() => {
-    // Force re-render of calendar implicitly by changing a state if needed,
-    // or rely on component re-render when props change.
-    // In this case, renderCalendar is called directly in JSX, so it will re-run.
+    // This effect ensures the calendar re-renders if its underlying data or month changes.
+    // The renderCalendar function is called directly in JSX, so it will react to state changes.
   }, [fixedSchedules, recurringSessions, scheduleOverrides, missedDays, programs, gyms, currentMonth]);
 
 
   const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
   
-  // CORRECTED: Calculate the day of the week for the first day of the month
+  // Calculates the day of the week for the first day of the month.
   // new Date(year, month, 1).getDay() returns 0 for Sunday, 1 for Monday... 6 for Saturday.
-  // We want Monday to be the first day (index 0 for our display).
+  // We adjust it to make Monday=0, Tuesday=1, ..., Sunday=6 for our display.
   const firstDayOfMonth = (year, month) => {
     const day = new Date(year, month, 1).getDay();
-    // Adjust to make Monday=0, Tuesday=1, ..., Sunday=6
+    // If it's Sunday (0), we want it to be index 6 (last day of our week array).
+    // Otherwise, subtract 1 to align with Monday=0.
     return (day === 0) ? 6 : day - 1; 
   };
 
@@ -44,12 +44,22 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
     const numDays = daysInMonth(year, month);
     const startingDay = firstDayOfMonth(year, month); // This will now correctly be 0 for Monday, 1 for Tuesday, etc.
 
+    // Debugging logs to help identify rendering issues
+    console.log(`--- Calendar Render Debug ---`);
+    console.log(`Current Month: ${currentMonth.toLocaleDateString('ca-ES', { month: 'long', year: 'numeric' })}`);
+    console.log(`Year: ${year}, Month Index: ${month}`);
+    console.log(`Number of days in month: ${numDays}`);
+    console.log(`Starting day (0=Mon, 6=Sun): ${startingDay}`);
+
+
     const calendarDays = [];
-    // Add empty cells for days before the 1st of the month
+    // Add empty cells (placeholders) for days before the 1st of the month
     for (let i = 0; i < startingDay; i++) {
+      // console.log(`Adding empty div for pre-first day: ${i}`); // Uncomment for very detailed debug
       calendarDays.push(<div key={`empty-${i}`} className="p-2 border border-gray-200 rounded-md bg-gray-100"></div>);
     }
 
+    // Add actual day cells
     for (let day = 1; day <= numDays; day++) {
       const date = new Date(year, month, day);
       const dateString = getLocalDateString(date);
@@ -109,7 +119,8 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
         }
       }
 
-      return (
+      // console.log(`Adding day ${day} with ${sessionsForCalendarDay.length} sessions`); // Uncomment for very detailed debug
+      calendarDays.push(
         <div key={dateString} className={dayClasses} onClick={() => handleDayClick(date)}>
           <div className="font-semibold text-gray-800 text-right">{day}</div>
           <div className="flex flex-wrap gap-1 mt-1">
@@ -125,9 +136,10 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
     return calendarDays;
   };
 
+  // CORRECTED: Ensure `newMonth` is initialized from `prevMonth`
   const handleMonthChange = (direction) => {
     setCurrentMonth(prevMonth => {
-      const newMonth = new Date(prevDate);
+      const newMonth = new Date(prevMonth); // Corrected: Use prevMonth to create new Date object
       newMonth.setMonth(prevMonth.getMonth() + direction);
       return newMonth;
     });
