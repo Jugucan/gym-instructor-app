@@ -20,8 +20,6 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
 
   const daysOfWeek = ['Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte', 'Diumenge'];
 
-  // This useEffect ensures calendar display updates when relevant data changes.
-  // No direct state updates inside that would cause infinite loops.
   useEffect(() => {
     // Force re-render of calendar implicitly by changing a state if needed,
     // or rely on component re-render when props change.
@@ -30,14 +28,21 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
 
 
   const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = (year, month) => new Date(year, month, 1).getDay(); // 0 = Sunday, 1 = Monday
+  
+  // CORRECTED: Calculate the day of the week for the first day of the month
+  // new Date(year, month, 1).getDay() returns 0 for Sunday, 1 for Monday... 6 for Saturday.
+  // We want Monday to be the first day (index 0 for our display).
+  const firstDayOfMonth = (year, month) => {
+    const day = new Date(year, month, 1).getDay();
+    // Adjust to make Monday=0, Tuesday=1, ..., Sunday=6
+    return (day === 0) ? 6 : day - 1; 
+  };
 
   const renderCalendar = () => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     const numDays = daysInMonth(year, month);
-    const firstDay = firstDayOfMonth(year, month); // 0 (Sunday) to 6 (Saturday)
-    const startingDay = (firstDay === 0 ? 6 : firstDay - 1); // Adjust for Monday-first calendar (0 = Monday, ..., 6 = Sunday)
+    const startingDay = firstDayOfMonth(year, month); // This will now correctly be 0 for Monday, 1 for Tuesday, etc.
 
     const calendarDays = [];
     // Add empty cells for days before the 1st of the month
