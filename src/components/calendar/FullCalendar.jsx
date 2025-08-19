@@ -1,7 +1,7 @@
 // src/components/calendar/FullCalendar.jsx
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, setDoc } from 'firebase/firestore'; // Added setDoc
 import { formatDate, normalizeDateToStartOfDay, getLocalDateString } from '../../utils/dateHelpers.jsx';
 import { getActiveFixedSchedule } from '../../utils/scheduleHelpers.jsx';
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
@@ -18,6 +18,11 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 
   const [showMissedDayModal, setShowMissedDayModal] = useState(false);
   const [missedDayDate, setMissedDayDate] = useState(null);
+  const [isMissedDayForModal, setIsMissedDayForModal] = useState(false);
+  const [missedDayDocIdForModal, setMissedDayDocIdForModal] = useState(null);
+  const [existingMissedGymId, setExistingMissedGymId] = useState('');
+  const [existingMissedNotes, setExistingMissedNotes] = useState('');
+
 
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
@@ -44,7 +49,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
     const override = scheduleOverrides.find(so => normalizeDateToStartOfDay(new Date(so.date)).getTime() === dateNormalized.getTime());
 
     if (override) {
-      // Ensure sessions have a temporary ID for keying in React if they don't from Firestore
+      // Ensure sessions have a temporary unique ID for React list keying if they don't from Firestore
       return override.sessions.map(s => ({ ...s, id: s.id || `override_${Date.now()}_${Math.random()}`, isOverride: true }));
     } else {
       const combinedSessions = [...fixedDaySessions, ...recurringSessionsForDay];
@@ -87,31 +92,31 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
     if (!scheduleOverridesCollectionPath) return;
 
     try {
-      const existingOverrideQuery = query(
-        collection(db, scheduleOverridesCollectionPath),
-        where('date', '==', dateToSave)
-      );
-      const querySnapshot = await getDocs(existingOverrideQuery);
+      const overrideDocRef = doc(db, scheduleOverridesCollectionPath, dateToSave); // Use date as document ID
 
-      if (!querySnapshot.empty) {
-        // Update existing override
-        const overrideDoc = querySnapshot.docs[0];
-        // Only save relevant fields, remove temporary IDs or flags
-        await updateDoc(doc(db, scheduleOverridesCollectionPath, overrideDoc.id), {
-          sessions: sessionsToSave.map(({ id, isNew, isOverride, isFixedOrRecurring, ...rest }) => rest),
+      if (sessionsToSave.length > 0) {
+        // Validate sessions before saving
+        for (const session of sessionsToSave) {
+          if (!session.programId || !session.time || !session.gymId) {
+            setMessageModalContent({
+              title: 'Error de Validació',
+              message: 'Si us plau, assegura\'t que totes les sessions tenen un programa, hora i gimnàs seleccionats.',
+              isConfirm: false,
+              onConfirm: () => setShowMessageModal(false),
+            });
+            setShowMessageModal(true);
+            return;
+          }
+        }
+        // Use setDoc to create or overwrite the document with date as ID
+        await setDoc(overrideDocRef, {
+          date: dateToSave,
+          sessions: sessionsToSave.map(({ id, isNew, isOverride, isFixedOrRecurring, ...rest }) => rest), // Remove temp IDs and flags
         });
       } else {
-        // Add new override
-        // Only save relevant fields, remove temporary IDs or flags
-        await addDoc(collection(db, scheduleOverridesCollectionPath), {
-          date: dateToSave,
-          sessions: sessionsToSave.map(({ id, isNew, isOverride, isFixedOrRecurring, ...rest }) => rest),
-        });
+        // If sessionsToSave is empty, delete the override document for this date
+        await deleteDoc(overrideDocRef);
       }
-
-      // Update program sessions historical data (if necessary, though `scheduleOverrides` is the source of truth for the day)
-      // This part might need more complex logic if sessions in programs are meant to reflect overrides.
-      // For now, let's assume `scheduleOverrides` is the primary source for daily schedule.
 
       setShowSessionModal(false);
       setMessageModalContent({
@@ -131,6 +136,25 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       });
       setShowMessageModal(true);
     }
+  };
+
+  const handleOpenMissedDayModal = (date) => {
+    setMissedDayDate(date);
+    const dateNormalized = normalizeDateToStartOfDay(date);
+    const existingMissedEntry = missedDays.find(md => normalizeDateToStartOfDay(new Date(md.date)).getTime() === dateNormalized.getTime());
+    
+    if (existingMissedEntry) {
+      setIsMissedDayForModal(true);
+      setMissedDayDocIdForModal(existingMissedEntry.id);
+      setExistingMissedGymId(existingMissedEntry.gymId);
+      setExistingMissedNotes(existingMissedEntry.notes);
+    } else {
+      setIsMissedDayForModal(false);
+      setMissedDayDocIdForModal(null);
+      setExistingMissedGymId('');
+      setExistingMissedNotes('');
+    }
+    setShowMissedDayModal(true);
   };
 
   const handleAddMissedDay = async ({ date, gymId, notes }) => {
@@ -188,6 +212,52 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       });
       setShowMessageModal(true);
     }
+  };
+
+  const handleRemoveMissedDay = async (docId) => {
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+    setMessageModalContent({
+      title: 'Confirmar Desmarcar Dia',
+      message: 'Estàs segur que vols desmarcar aquest dia com a no assistit?',
+      isConfirm: true,
+      onConfirm: async () => {
+        try {
+          const missedDaysCollectionPath = getUserCollectionPath(appId, currentUserId, 'missedDays');
+          if (!missedDaysCollectionPath) return;
+
+          await deleteDoc(doc(db, missedDaysCollectionPath, docId));
+          setShowMessageModal(false); // Close confirm modal
+          setShowMissedDayModal(false); // Close the original modal
+          setMessageModalContent({
+            title: 'Dia Desmarcat',
+            message: 'El dia s\'ha desmarcat com a no assistit correctament.',
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+          setShowMessageModal(true);
+        } catch (error) {
+          console.error("Error removing missed day:", error);
+          setMessageModalContent({
+            title: 'Error',
+            message: `Hi ha hagut un error al desmarcar el dia: ${error.message}`,
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+          setShowMessageModal(true);
+        }
+      },
+      onCancel: () => setShowMessageModal(false),
+    });
+    setShowMessageModal(true);
   };
 
 
@@ -256,7 +326,8 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 
             const isHoliday = gyms.some(gym => gym.holidaysTaken.includes(dateStr));
             const isGymClosure = false; // Not implemented yet
-            const isMissed = missedDays.some(md => normalizeDateToStartOfDay(new Date(md.date)).getTime() === dateNormalized.getTime());
+            const currentMissedDayEntry = missedDays.find(md => normalizeDateToStartOfDay(new Date(md.date)).getTime() === dateNormalized.getTime());
+            const isMissed = !!currentMissedDayEntry;
 
 
             return (
@@ -266,7 +337,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
                   ${dateStr === getLocalDateString(todayNormalized) ? 'bg-blue-200 border border-blue-500' : 'bg-gray-100'}
                   ${isHoliday ? 'bg-red-200 border border-red-500' : ''}
                   ${isGymClosure ? 'bg-purple-200 border border-purple-500' : ''}
-                  ${isMissed ? 'bg-red-100 border border-red-400' : ''}
+                  ${isMissed ? 'bg-orange-100 border border-orange-400' : ''}
                 `}
               >
                 <span className="font-bold">{date.getDate()}</span>
@@ -288,7 +359,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
                 {isHoliday && <span className="text-[10px] text-red-700 mt-1">Vacances</span>}
                 {isGymClosure && <span className="text-[10px] text-purple-700 mt-1">Tancat</span>}
                 {isMissed && (
-                  <span className="absolute top-1 left-1 text-xs text-red-600" title="Dia no assistit">
+                  <span className="absolute top-1 left-1 text-xs text-orange-600" title="Dia no assistit">
                     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
                   </span>
                 )}
@@ -301,7 +372,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
                     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zm-6.721 6.721A2 2 0 014 14.172V16h1.828l6.172-6.172-2.828-2.828L6.865 10.307zM2 18h16v2H2v-2z"></path></svg>
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); setMissedDayDate(date); setShowMissedDayModal(true); }}
+                    onClick={(e) => { e.stopPropagation(); handleOpenMissedDayModal(date); }}
                     className="bg-red-500 hover:bg-red-600 text-white p-1 rounded-md text-[8px] leading-none"
                     title="Marcar com a dia no assistit"
                   >
@@ -329,8 +400,13 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
           show={showMissedDayModal}
           onClose={() => setShowMissedDayModal(false)}
           onSave={handleAddMissedDay}
+          onUnmark={handleRemoveMissedDay}
           date={missedDayDate}
           gyms={gyms}
+          isAlreadyMissed={isMissedDayForModal}
+          missedDayDocId={missedDayDocIdForModal}
+          existingMissedGymId={existingMissedGymId}
+          existingMissedNotes={existingMissedNotes}
         />
       )}
       {showMessageModal && (
