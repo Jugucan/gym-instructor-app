@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { doc, getDoc, setDoc, collection, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { formatDate } from '../../utils/dateHelpers.js'; // Helper for formatting dates
-import { getUserCollectionPath } from '../../utils/firebasePaths.js'; // Helper for Firebase paths
-import { MessageModal } from '../common/MessageModal.jsx';
+import { formatDate } from '../../utils/dateHelpers.jsx'; // Helper for formatting dates (Corrected to .jsx)
+import { getUserCollectionPath } from '../../utils/firebasePaths.jsx'; // Helper for Firebase paths (Corrected to .jsx)
+import { MessageModal } from '../common/MessageModal.jsx'; // Corrected syntax: from instead of =>
 
 
 const Users = ({ users, gyms, db, currentUserId, appId }) => {
@@ -15,9 +15,9 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
   const [userSessions, setUserSessions] = useState('');
   const [userNotes, setUserNotes] = useState('');
   const [userGymId, setUserGymId] = useState('');
-  const [userPhone, setUserPhone] = useState('');
-  const [userEmail, setUserEmail] = useState('');
-  const [userPhotoUrl, setUserPhotoUrl] = useState('');
+  const [userPhone, setUserPhone] = '';
+  const [userEmail, setUserEmail] = '';
+  const [userPhotoUrl, setUserPhotoUrl] = '';
 
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
