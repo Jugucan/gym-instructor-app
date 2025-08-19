@@ -4,8 +4,8 @@ export const MessageModal = ({ show, title, message, onConfirm, onCancel, isConf
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm mx-4">
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4"> {/* Added p-4 for padding on small screens */}
+      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm mx-auto"> {/* Added mx-auto for centering */}
         <h2 className="text-xl font-bold text-gray-800 mb-4">{title}</h2>
         <p className="text-gray-700 mb-6">{message}</p>
         <div className="flex justify-end space-x-4">
