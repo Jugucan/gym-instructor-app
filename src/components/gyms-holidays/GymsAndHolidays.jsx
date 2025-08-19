@@ -490,7 +490,7 @@ const GymsAndHolidays = ({ gyms, db, currentUserId, appId }) => {
       {/* Gym Modal */}
       {showGymModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto"> {/* Added max-h and overflow */}
             <h2 className="text-xl font-bold text-gray-800 mb-4">{editingGym ? 'Editar Gimnàs' : 'Afegir Nou Gimnàs'}</h2>
             <div className="mb-4">
               <label htmlFor="gymName" className="block text-gray-700 text-sm font-bold mb-2">Nom del Gimnàs:</label>
@@ -550,7 +550,7 @@ const GymsAndHolidays = ({ gyms, db, currentUserId, appId }) => {
       {/* Holiday Modal */}
       {showHolidayModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto"> {/* Added max-h and overflow */}
             <h2 className="text-xl font-bold text-gray-800 mb-4">Registrar Vacances / Tancament</h2>
             <div className="mb-4">
               <label htmlFor="selectGymForHoliday" className="block text-gray-700 text-sm font-bold mb-2">Selecciona Gimnàs:</label>
