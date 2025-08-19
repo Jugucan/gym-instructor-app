@@ -15,9 +15,10 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
   const [userSessions, setUserSessions] = useState('');
   const [userNotes, setUserNotes] = useState('');
   const [userGymId, setUserGymId] = useState('');
-  const [userPhone, setUserPhone] = '';
-  const [userEmail, setUserEmail] = '';
-  const [userPhotoUrl, setUserPhotoUrl] = '';
+  // CORRECTED: Ensure useState is used for all state variables
+  const [userPhone, setUserPhone] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const [userPhotoUrl, setUserPhotoUrl] = useState('');
 
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
@@ -44,9 +45,9 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
     setUserSessions('');
     setUserNotes('');
     setUserGymId('');
-    setUserPhone('');
-    setUserEmail('');
-    setUserPhotoUrl('');
+    setUserPhone(''); // Clear phone
+    setUserEmail(''); // Clear email
+    setUserPhotoUrl(''); // Clear photo URL
     setShowUserModal(true);
   };
 
