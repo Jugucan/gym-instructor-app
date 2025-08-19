@@ -1,96 +1,62 @@
-// src/components/schedule/FixedScheduleManagement.jsx
-
-import React, { useState, useEffect } from 'react';
-import { collection, addDoc, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
-import { getLocalDateString, normalizeDateToStartOfDay } from '../../utils/dateHelpers.jsx';
-import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
-import { MessageModal } from '../common/MessageModal.jsx'; // Import MessageModal
-
+import React, { useState } from 'react';
+import { collection, addDoc, doc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
+import { getUserCollectionPath } from '../../utils/firebasePaths.jsx'; // Confirmat: .jsx
+import { getLocalDateString } from '../../utils/dateHelpers.jsx'; // Confirmat: .jsx
+import { MessageModal } from '../common/MessageModal.jsx'; // Confirmat: .jsx
 
 const FixedScheduleManagement = ({ fixedSchedules, programs, gyms, db, currentUserId, appId }) => {
-  const defaultScheduleEntry = { programId: '', time: '', gymId: '' };
-  const initialSchedule = {
-    lunes: [defaultScheduleEntry],
-    martes: [defaultScheduleEntry],
-    miercoles: [defaultScheduleEntry],
-    jueves: [defaultScheduleEntry],
-    viernes: [defaultScheduleEntry],
-    sabado: [defaultScheduleEntry],
-    domingo: [defaultScheduleEntry],
-  };
-
-  const [isEditing, setIsEditing] = useState(false);
-  const [currentFixedSchedule, setCurrentFixedSchedule] = useState({
-    id: null,
-    startDate: '',
-    ...initialSchedule,
-  });
+  const [showModal, setShowModal] = useState(false);
+  const [editingScheduleEntry, setEditingScheduleEntry] = useState(null);
+  const [scheduleStartDate, setScheduleStartDate] = useState('');
+  const [currentEditingSchedule, setCurrentEditingSchedule] = useState({}); // Stores sessions for each day
 
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
+  const daysOfWeekNames = ['Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte', 'Diumenge'];
 
-  const handleInputChange = (day, index, field, value) => {
-    const updatedDay = [...currentFixedSchedule[day]];
-    updatedDay[index] = { ...updatedDay[index], [field]: value };
-    setCurrentFixedSchedule({ ...currentFixedSchedule, [day]: updatedDay });
+  const handleAddSessionToDay = (day) => {
+    setCurrentEditingSchedule(prev => ({
+      ...prev,
+      [day]: [...(prev[day] || []), { programId: '', time: '', gymId: '' }]
+    }));
   };
 
-  const addSession = (day) => {
-    setCurrentFixedSchedule({
-      ...currentFixedSchedule,
-      [day]: [...currentFixedSchedule[day], defaultScheduleEntry],
+  const handleUpdateSessionInDay = (day, index, field, value) => {
+    setCurrentEditingSchedule(prev => {
+      const updatedDaySessions = [...prev[day]];
+      updatedDaySessions[index] = { ...updatedDaySessions[index], [field]: value };
+      return { ...prev, [day]: updatedDaySessions };
     });
   };
 
-  const removeSession = (day, index) => {
-    const updatedDay = currentFixedSchedule[day].filter((_, i) => i !== index);
-    setCurrentFixedSchedule({ ...currentFixedSchedule, [day]: updatedDay });
-  };
-
-  const handleEdit = (schedule) => {
-    setIsEditing(true);
-    setCurrentFixedSchedule({
-      id: schedule.id,
-      startDate: schedule.startDate,
-      lunes: schedule.lunes || [],
-      martes: schedule.martes || [],
-      miercoles: schedule.miercoles || [],
-      jueves: schedule.jueves || [],
-      viernes: schedule.viernes || [],
-      sabado: schedule.sabado || [],
-      domingo: schedule.domingo || [],
+  const handleDeleteSessionFromDay = (day, index) => {
+    setCurrentEditingSchedule(prev => {
+      const updatedDaySessions = prev[day].filter((_, i) => i !== index);
+      if (updatedDaySessions.length === 0) {
+        const { [day]: removedDay, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [day]: updatedDaySessions };
     });
   };
 
-  const handleCopy = (schedule) => {
-    setIsEditing(true); // Treat copy as starting a new edit operation
-    const today = getLocalDateString(new Date()); // Default to today or a clear indicator
-    setCurrentFixedSchedule({
-      id: null, // New ID for new document
-      startDate: today, // Provide a default new date for copying
-      lunes: schedule.lunes || [],
-      martes: schedule.martes || [],
-      miercoles: schedule.miercoles || [],
-      jueves: schedule.jueves || [],
-      viernes: schedule.viernes || [],
-      sabado: schedule.sabado || [],
-      domingo: schedule.domingo || [],
-    });
-    setMessageModalContent({
-      title: 'Horari Copiat',
-      message: 'Les sessions de l\'horari han estat copiades. Edita la data d\'inici i les sessions per crear un nou horari.',
-      isConfirm: false,
-      onConfirm: () => setShowMessageModal(false),
-    });
-    setShowMessageModal(true);
-  };
-
-  const handleSave = async () => {
+  const handleSaveFixedSchedule = async () => {
     if (!db || !currentUserId || !appId) {
+        setMessageModalContent({
+          title: 'Error de Connexió',
+          message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+          isConfirm: false,
+          onConfirm: () => setShowMessageModal(false),
+        });
+        setShowMessageModal(true);
+        return;
+      }
+
+    if (!scheduleStartDate) {
       setMessageModalContent({
-        title: 'Error de Connexió',
-        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        title: 'Camps Obligatoris',
+        message: 'Si us plau, selecciona una data d\'inici per a l\'horari.',
         isConfirm: false,
         onConfirm: () => setShowMessageModal(false),
       });
@@ -98,26 +64,14 @@ const FixedScheduleManagement = ({ fixedSchedules, programs, gyms, db, currentUs
       return;
     }
 
-    if (!currentFixedSchedule.startDate) {
-      setMessageModalContent({
-        title: 'Error de Validació',
-        message: 'La data d\'inici de validesa és obligatòria.',
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
-      return;
-    }
-
-    // Validate sessions to ensure programId, time, and gymId are not empty for existing entries
-    const days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
-    for (const day of days) {
-      for (const session of currentFixedSchedule[day]) {
-        if (session.programId || session.time || session.gymId) { // Only validate if at least one field is filled, implies user intended to add a session
+    // Validate sessions within the schedule
+    for (const day of daysOfWeekNames) {
+      if (currentEditingSchedule[day]) {
+        for (const session of currentEditingSchedule[day]) {
           if (!session.programId || !session.time || !session.gymId) {
             setMessageModalContent({
               title: 'Error de Validació',
-              message: `Si us plau, assegura't que totes les sessions per al dia ${day} tenen un programa, hora i gimnàs seleccionats, o esborra les sessions incompletes.`,
+              message: `Si us plau, assegura't que totes les sessions del ${day} tenen un programa, hora i gimnàs seleccionats.`,
               isConfirm: false,
               onConfirm: () => setShowMessageModal(false),
             });
@@ -128,41 +82,54 @@ const FixedScheduleManagement = ({ fixedSchedules, programs, gyms, db, currentUs
       }
     }
 
-
-    const scheduleData = {
-      startDate: currentFixedSchedule.startDate,
-      lunes: currentFixedSchedule.lunes.filter(s => s.programId && s.time && s.gymId),
-      martes: currentFixedSchedule.martes.filter(s => s.programId && s.time && s.gymId),
-      miercoles: currentFixedSchedule.miercoles.filter(s => s.programId && s.time && s.gymId),
-      jueves: currentFixedSchedule.jueves.filter(s => s.programId && s.time && s.gymId),
-      viernes: currentFixedSchedule.viernes.filter(s => s.programId && s.time && s.gymId),
-      sabado: currentFixedSchedule.sabado.filter(s => s.programId && s.time && s.gymId),
-      domingo: currentFixedSchedule.domingo.filter(s => s.programId && s.time && s.gymId),
+    const newScheduleEntryData = {
+      startDate: scheduleStartDate,
+      schedule: currentEditingSchedule,
     };
 
-    const fixedSchedulesCollectionPath = getUserCollectionPath(appId, currentUserId, 'fixedSchedules');
-    if (!fixedSchedulesCollectionPath) return;
+    const fixedSchedulesPath = getUserCollectionPath(appId, currentUserId, 'fixedSchedules');
+    if (!fixedSchedulesPath) return;
 
     try {
-      if (isEditing && currentFixedSchedule.id) {
-        await updateDoc(doc(db, fixedSchedulesCollectionPath, currentFixedSchedule.id), scheduleData);
+      if (editingScheduleEntry) {
+        const scheduleRef = doc(db, fixedSchedulesPath, editingScheduleEntry.id);
+        await updateDoc(scheduleRef, newScheduleEntryData);
         setMessageModalContent({
           title: 'Horari Actualitzat',
-          message: 'Horari fix actualitzat correctament!',
+          message: 'L\'horari fix s\'ha actualitzat correctament.',
           isConfirm: false,
           onConfirm: () => setShowMessageModal(false),
         });
       } else {
-        await addDoc(collection(db, fixedSchedulesCollectionPath), scheduleData);
+        // Prevent adding a new schedule with a start date earlier than the latest existing one
+        const latestExistingSchedule = fixedSchedules.length > 0
+          ? fixedSchedules.sort((a, b) => b.startDate.localeCompare(a.startDate))[0]
+          : null;
+
+        if (latestExistingSchedule && newScheduleEntryData.startDate <= latestExistingSchedule.startDate) {
+          setMessageModalContent({
+            title: 'Error de Data',
+            message: `La data d'inici del nou horari (${newScheduleEntryData.startDate}) ha de ser posterior a l'últim horari existent (${latestExistingSchedule.startDate}).`,
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+          setShowMessageModal(true);
+          return;
+        }
+
+        await addDoc(collection(db, fixedSchedulesPath), newScheduleEntryData);
         setMessageModalContent({
-          title: 'Horari Creat',
-          message: 'Horari fix creat correctament!',
+          title: 'Horari Afegit',
+          message: 'El nou horari fix s\'ha afegit correctament.',
           isConfirm: false,
           onConfirm: () => setShowMessageModal(false),
         });
       }
       setShowMessageModal(true);
-      resetForm();
+      setShowModal(false);
+      setScheduleStartDate('');
+      setCurrentEditingSchedule({});
+      setEditingScheduleEntry(null);
     } catch (error) {
       console.error("Error saving fixed schedule:", error);
       setMessageModalContent({
@@ -175,45 +142,43 @@ const FixedScheduleManagement = ({ fixedSchedules, programs, gyms, db, currentUs
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDeleteSchedule = (id) => {
     if (!db || !currentUserId || !appId) {
-      setMessageModalContent({
-        title: 'Error de Connexió',
-        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
-      return;
-    }
+        setMessageModalContent({
+          title: 'Error de Connexió',
+          message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+          isConfirm: false,
+          onConfirm: () => setShowMessageModal(false),
+        });
+        setShowMessageModal(true);
+        return;
+      }
 
     setMessageModalContent({
       title: 'Confirmar Eliminació',
-      message: 'Estàs segur que vols eliminar aquest horari fix? Aquesta acció no es pot desfer.',
+      message: 'Estàs segur que vols eliminar aquest horari fix? Aquesta acció és irreversible.',
       isConfirm: true,
       onConfirm: async () => {
+        const fixedSchedulesPath = getUserCollectionPath(appId, currentUserId, 'fixedSchedules');
+        if (!fixedSchedulesPath) return;
         try {
-          const fixedSchedulesCollectionPath = getUserCollectionPath(appId, currentUserId, 'fixedSchedules');
-          if (!fixedSchedulesCollectionPath) return;
-
-          await deleteDoc(doc(db, fixedSchedulesCollectionPath, id));
+          await deleteDoc(doc(db, fixedSchedulesPath, id));
+          setShowMessageModal(true);
           setMessageModalContent({
-            title: 'Horari Eliminat',
-            message: 'Horari fix eliminat correctament!',
+            title: 'Eliminat',
+            message: 'Horari fix eliminat correctament.',
             isConfirm: false,
             onConfirm: () => setShowMessageModal(false),
           });
-          setShowMessageModal(true);
-          resetForm();
         } catch (error) {
           console.error("Error deleting fixed schedule:", error);
+          setShowMessageModal(true);
           setMessageModalContent({
             title: 'Error',
             message: `Hi ha hagut un error al eliminar l'horari fix: ${error.message}`,
             isConfirm: false,
             onConfirm: () => setShowMessageModal(false),
           });
-          setShowMessageModal(true);
         }
       },
       onCancel: () => setShowMessageModal(false),
@@ -221,142 +186,147 @@ const FixedScheduleManagement = ({ fixedSchedules, programs, gyms, db, currentUs
     setShowMessageModal(true);
   };
 
-  const resetForm = () => {
-    setIsEditing(false);
-    setCurrentFixedSchedule({
-      id: null,
-      startDate: '',
-      ...initialSchedule,
-    });
-  };
-
-  const daysOfWeek = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
-  const dayNamesCatalan = {
-    lunes: 'Dilluns',
-    martes: 'Dimarts',
-    miercoles: 'Dimecres',
-    jueves: 'Dijous',
-    viernes: 'Divendres',
-    sabado: 'Dissabte',
-    domingo: 'Diumenge',
+  const handleEditSchedule = (scheduleEntry) => {
+    setEditingScheduleEntry(scheduleEntry);
+    setScheduleStartDate(scheduleEntry.startDate);
+    setCurrentEditingSchedule(scheduleEntry.schedule);
+    setShowModal(true);
   };
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-inter">
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">{isEditing ? 'Editar Horari Fix' : 'Afegir Nou Horari Fix'}</h2>
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">Gestió d'Horaris Fixos</h1>
 
-        <div className="mb-4">
-          <label htmlFor="startDate" className="block text-gray-700 text-sm font-bold mb-2">Data d'Inici de Validesa:</label>
-          <input
-            type="date"
-            id="startDate"
-            value={currentFixedSchedule.startDate}
-            onChange={(e) => setCurrentFixedSchedule({ ...currentFixedSchedule, startDate: e.target.value })}
-            className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-900 leading-tight focus:outline-none focus:shadow-outline bg-white"
-          />
-        </div>
+      <button
+        onClick={() => { setShowModal(true); setEditingScheduleEntry(null); setScheduleStartDate(''); setCurrentEditingSchedule({}); }}
+        className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out mb-6"
+      >
+        Afegir Nou Horari Fix
+      </button>
 
-        {daysOfWeek.map(day => (
-          <div key={day} className="mb-6 border-b pb-4">
-            <h3 className="text-xl font-semibold text-gray-800 mb-3 capitalize">{dayNamesCatalan[day]}</h3>
-            {currentFixedSchedule[day].map((session, index) => (
-              <div key={index} className="flex flex-wrap items-center gap-2 mb-2 p-2 bg-gray-50 rounded-lg shadow-sm">
-                <select
-                  value={session.programId}
-                  onChange={(e) => handleInputChange(day, index, 'programId', e.target.value)}
-                  className="shadow border rounded-lg py-2 px-3 text-gray-900 leading-tight focus:outline-none focus:shadow-outline flex-grow bg-white"
-                >
-                  <option value="">Selecciona un programa</option>
-                  {programs.map(program => (
-                    <option key={program.id} value={program.id}>{program.name}</option>
-                  ))}
-                </select>
-                <input
-                  type="time"
-                  value={session.time}
-                  onChange={(e) => handleInputChange(day, index, 'time', e.target.value)}
-                  className="shadow appearance-none border rounded-lg py-2 px-3 text-gray-900 leading-tight focus:outline-none focus:shadow-outline w-auto bg-white"
-                />
-                <select
-                  value={session.gymId}
-                  onChange={(e) => handleInputChange(day, index, 'gymId', e.target.value)}
-                  className="shadow border rounded-lg py-2 px-3 text-gray-900 leading-tight focus:outline-none focus:shadow-outline flex-grow bg-white"
-                >
-                  <option value="">Selecciona un gimnàs</option>
-                  {gyms.map(gym => (
-                    <option key={gym.id} value={gym.id}>{gym.name}</option>
-                  ))}
-                </select>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {fixedSchedules.map(scheduleEntry => (
+          <div key={scheduleEntry.id} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200">
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">Horari des de: {getLocalDateString(new Date(scheduleEntry.startDate))}</h2>
+            <div className="mb-4">
+              {daysOfWeekNames.map(day => (
+                scheduleEntry.schedule[day] && scheduleEntry.schedule[day].length > 0 && (
+                  <div key={day} className="mb-2">
+                    <h3 className="text-md font-medium text-gray-700">{day}:</h3>
+                    <ul className="list-disc list-inside text-sm text-gray-600 ml-4">
+                      {scheduleEntry.schedule[day].map((session, index) => (
+                        <li key={index}>
+                          {session.time} - {programs.find(p => p.id === session.programId)?.shortName || 'N/A'} (
+                          {gyms.find(g => g.id === session.gymId)?.name || 'N/A'})
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              ))}
+            </div>
+            <div className="flex justify-end space-x-2 mt-4">
+              <button
+                onClick={() => handleEditSchedule(scheduleEntry)}
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
+              >
+                Editar
+              </button>
+              <button
+                onClick={() => handleDeleteSchedule(scheduleEntry.id)}
+                className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto"> {/* Adjusted max-h */}
+            <h2 className="text-xl font-bold text-gray-800 mb-4">{editingScheduleEntry ? 'Editar Horari Fix' : 'Afegir Nou Horari Fix'}</h2>
+            <div className="mb-4">
+              <label htmlFor="scheduleStartDate" className="block text-gray-700 text-sm font-bold mb-2">Data d'Inici de Validesa:</label>
+              <input
+                type="date"
+                id="scheduleStartDate"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={scheduleStartDate}
+                onChange={(e) => setScheduleStartDate(e.target.value)}
+              />
+            </div>
+
+            {daysOfWeekNames.map(day => (
+              <div key={day} className="mb-6 border-b border-gray-200 pb-4">
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">{day}</h3>
+                {currentEditingSchedule[day] && currentEditingSchedule[day].length > 0 ? (
+                  currentEditingSchedule[day].map((session, index) => (
+                    <div key={index} className="flex items-center space-x-2 mb-2 bg-gray-50 p-3 rounded-lg">
+                      <select
+                        className="shadow border rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1"
+                        value={session.programId}
+                        onChange={(e) => handleUpdateSessionInDay(day, index, 'programId', e.target.value)}
+                      >
+                        <option value="">Programa</option>
+                        {programs.map(program => (
+                          <option key={program.id} value={program.id}>{program.name}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="time"
+                        className="shadow border rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 w-24"
+                        value={session.time}
+                        onChange={(e) => handleUpdateSessionInDay(day, index, 'time', e.target.value)}
+                      />
+                      <select
+                        className="shadow border rounded-lg py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1"
+                        value={session.gymId}
+                        onChange={(e) => handleUpdateSessionInDay(day, index, 'gymId', e.target.value)}
+                      >
+                        <option value="">Gimnàs</option>
+                        {gyms.map(gym => (
+                          <option key={gym.id} value={gym.id}>{gym.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => handleDeleteSessionFromDay(day, index)}
+                        className="bg-red-500 hover:bg-red-600 text-white font-bold p-2 rounded-lg transition duration-300 ease-in-out text-sm"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 fill-current" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm2.46-7.12l1.41-1.41L12 12.17l2.12-2.12 1.41 1.41L13.41 13.5l2.12 2.12-1.41 1.41L12 14.83l-2.12 2.12-1.41-1.41L10.59 13.5l-2.13-2.12zM15.5 4l-1-1h-5l-1 1H5v2h14V4h-3.5z"/></svg>
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-500 text-sm mb-2">No hi ha sessions programades per a {day}.</p>
+                )}
                 <button
-                  onClick={() => removeSession(day, index)}
-                  className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg shadow-md transition duration-300 ease-in-out"
+                  onClick={() => handleAddSessionToDay(day)}
+                  className="mt-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                  Afegir Sessió
                 </button>
               </div>
             ))}
-            <button
-              onClick={() => addSession(day)}
-              className="mt-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
-            >
-              Afegir Sessió
-            </button>
+
+            <div className="flex justify-end space-x-4 mt-6">
+              <button
+                onClick={() => setShowModal(false)}
+                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+              >
+                Cancel·lar
+              </button>
+              <button
+                onClick={handleSaveFixedSchedule}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+              >
+                {editingScheduleEntry ? 'Guardar Canvis' : 'Afegir Horari'}
+              </button>
+            </div>
           </div>
-        ))}
-
-        <div className="flex justify-end space-x-4 mt-6">
-          <button
-            onClick={handleSave}
-            className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
-          >
-            {isEditing ? 'Guardar Canvis' : 'Afegir Horari'}
-          </button>
-          <button
-            onClick={resetForm}
-            className="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
-          >
-            Cancel·lar
-          </button>
         </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">Horaris Fixos Existents</h2>
-        {fixedSchedules.length === 0 ? (
-          <p className="text-gray-600">No hi ha horaris fixos. Afegeix-ne un per començar!</p>
-        ) : (
-          <ul className="space-y-4">
-            {fixedSchedules.map(schedule => (
-              <li key={schedule.id} className="flex items-center justify-between bg-gray-50 p-4 rounded-lg shadow-sm">
-                <span className="font-semibold text-gray-700">
-                  Data d'inici: {getLocalDateString(new Date(schedule.startDate))}
-                </span>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => handleEdit(schedule)}
-                    className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg shadow-md transition duration-300 ease-in-out"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => handleCopy(schedule)}
-                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-3 rounded-lg shadow-md transition duration-300 ease-in-out"
-                  >
-                    Copiar
-                  </button>
-                  <button
-                    onClick={() => handleDelete(schedule.id)}
-                    className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg shadow-md transition duration-300 ease-in-out"
-                  >
-                    Eliminar
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      )}
       {showMessageModal && (
         <MessageModal
           show={showMessageModal}
