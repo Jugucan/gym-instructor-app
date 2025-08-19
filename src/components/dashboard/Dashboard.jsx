@@ -529,7 +529,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
                       <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
                     </span>
                   )}
-                  <div className="absolute bottom-1 left-0 right-0 flex justify-center space-x-1">
+                  <div className="absolute bottom-1 right-1 flex space-x-1"> {/* MODIFIED: Changed positioning to bottom-right */}
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDayClick(date); }}
                       className="bg-blue-500 hover:bg-blue-600 text-white p-1 rounded-md text-[8px] leading-none"
