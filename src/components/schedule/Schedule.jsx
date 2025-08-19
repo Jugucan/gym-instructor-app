@@ -127,7 +127,7 @@ const Schedule = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleO
 
   const handleMonthChange = (direction) => {
     setCurrentMonth(prevMonth => {
-      const newMonth = new Date(prevMonth);
+      const newMonth = new Date(prevDate);
       newMonth.setMonth(prevMonth.getMonth() + direction);
       return newMonth;
     });
