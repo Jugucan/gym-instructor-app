@@ -9,18 +9,17 @@ import Programs from './components/programs/Programs.jsx';
 import ProgramDetail from './components/programs/ProgramDetail.jsx';
 import Schedule from './components/schedule/Schedule.jsx';
 import Users from './components/users/Users.jsx';
-import GymsAndHolidays from './components/gyms_holidays/GymsAndHolidays.jsx';
+import GymsAndHolidays from './components/gyms-holidays/GymsAndHolidays.jsx';
 import Mixes from './components/mixes/Mixes.jsx';
 import Settings from './components/settings/Settings.jsx';
 import FixedScheduleManagement from './components/schedule/FixedScheduleManagement.jsx';
 import RecurringSessions from './components/schedule/RecurringSessions.jsx';
 import MonthlyReport from './components/reports/MonthlyReport.jsx';
-import Auth from './components/auth/Auth.jsx'; // New Auth component
+import Auth from './components/auth/Auth.jsx';
 
-// Importa els helpers i hooks (ara amb .jsx)
+// Importa els helpers i hooks
 import useFirestoreData from './hooks/useFirestoreData.jsx';
 import { MessageModal } from './components/common/MessageModal.jsx';
-
 
 function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -36,16 +35,52 @@ function App() {
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
-  const [showAuthModal, setShowAuthModal] = useState(false); // State to control auth modal visibility
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  
+  // Estados para responsividad
+  const [isMobile, setIsMobile] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+
+  // Hook para detectar el tamaño de pantalla
+  useEffect(() => {
+    const checkScreenSize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) {
+        setShowMobileMenu(false);
+      }
+    };
+    
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
+
+  // Definir elementos del menú con iconos
+  const menuItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'programs', label: 'Programes', icon: '💪' },
+    { id: 'schedule', label: 'Calendari', icon: '📅' },
+    { id: 'users', label: 'Usuaris', icon: '👥' },
+    { id: 'mixes', label: 'Mixos', icon: '🥤' },
+    { id: 'gymsAndHolidays', label: 'Vacances', icon: '🏖️' },
+    { id: 'monthlyReport', label: 'Informe', icon: '📈' },
+    { id: 'settings', label: 'Configuració', icon: '⚙️' },
+  ];
+
+  const handlePageChange = (pageId) => {
+    setCurrentPage(pageId);
+    if (isMobile) {
+      setShowMobileMenu(false);
+    }
+  };
 
   // Initialize Firebase and set up authentication
   useEffect(() => {
     const initializeFirebase = async () => {
       try {
         const env = import.meta.env || {};
-        console.log("VITE_FIREBASE_CONFIG:", env.VITE_FIREBASE_CONFIG);
-        console.log("VITE_APP_ID:", env.VITE_APP_ID);
-
         const rawFirebaseConfig = env.VITE_FIREBASE_CONFIG;
         const envAppId = env.VITE_APP_ID || 'default-app-id';
         setAppId(envAppId);
@@ -69,7 +104,6 @@ function App() {
           }
         }
         
-        // If firebaseConfig is empty or invalid, proceed with dummy data
         if (Object.keys(firebaseConfig).length === 0 || !firebaseConfig.projectId) {
           console.warn("Firebase config not found or invalid. Using dummy data for local development.");
           setIsFirebaseReady(true);
@@ -88,16 +122,13 @@ function App() {
 
         onAuthStateChanged(firebaseAuth, async (user) => {
           if (user) {
-            // User is signed in (anonymously or with email)
             setCurrentUserId(user.uid);
-            setShowAuthModal(false); // Hide auth modal if already signed in
+            setShowAuthModal(false);
             setLoadingMessage('Carregant dades del núvol...');
           } else {
-            // No user signed in, attempt anonymous or show auth modal
             if (initialAuthToken) {
               await signInWithCustomToken(firebaseAuth, initialAuthToken);
             } else {
-              // If no custom token and no user, show auth modal for persistent login
               setCurrentUserId(null);
               setShowAuthModal(true);
               setLoadingMessage('Inicia sessió o registra\'t per carregar les teves dades.');
@@ -114,9 +145,8 @@ function App() {
     };
 
     initializeFirebase();
-  }, []); // Run once on component mount
+  }, []);
 
-  // Use the custom hook to fetch and manage Firestore data
   const { programs, users, gyms, fixedSchedules, recurringSessions, scheduleOverrides, missedDays, setMissedDays, dataLoaded } = useFirestoreData(dbInstance, currentUserId, appId, isFirebaseReady, setLoadingMessage, setShowMessageModal, setMessageModalContent);
 
   useEffect(() => {
@@ -191,7 +221,7 @@ function App() {
     if (!authInstance) return;
     try {
       await signOut(authInstance);
-      setCurrentUserId(null); // Clear user ID on logout
+      setCurrentUserId(null);
       setLoadingMessage('Sessió tancada. Inicia sessió de nou.');
       setShowMessageModal(true);
       setMessageModalContent({
@@ -212,24 +242,29 @@ function App() {
     }
   };
 
-
   const renderPage = () => {
     if (!isFirebaseReady) {
       return (
-        <div className="flex justify-center items-center min-h-[calc(100vh-100px)]">
-          <p className="text-xl text-gray-700">{loadingMessage}</p>
+        <div className="flex justify-center items-center min-h-[60vh] p-4">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-lg sm:text-xl text-gray-700">{loadingMessage}</p>
+          </div>
         </div>
       );
     }
 
-    if (showAuthModal && !currentUserId) { // Show auth modal if not signed in and it's active
+    if (showAuthModal && !currentUserId) {
       return <Auth onLogin={handleLogin} onRegister={handleRegister} />;
     }
 
-    if (!currentUserId || !dataLoaded) { // Wait for user data to load after authentication
+    if (!currentUserId || !dataLoaded) {
       return (
-        <div className="flex justify-center items-center min-h-[calc(100vh-100px)]">
-          <p className="text-xl text-gray-700">{loadingMessage}</p>
+        <div className="flex justify-center items-center min-h-[60vh] p-4">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-lg sm:text-xl text-gray-700">{loadingMessage}</p>
+          </div>
         </div>
       );
     }
@@ -267,51 +302,164 @@ function App() {
     <div className="flex flex-col min-h-screen bg-gray-100 font-inter">
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-      <nav className="bg-gradient-to-r from-blue-600 to-blue-800 p-4 shadow-lg">
-        <div className="container mx-auto flex flex-col md:flex-row justify-between items-center"> {/* Added flex-col md:flex-row */}
-          <h1 className="text-white text-2xl font-bold mb-2 md:mb-0">Gym Instructor</h1> {/* Added mb-2 md:mb-0 */}
-          {currentUserId ? (
-            <div className="flex items-center space-x-4 mb-2 md:mb-0"> {/* Added mb-2 md:mb-0 */}
-              <span className="text-white text-sm">
-                ID d'usuari: <span className="font-mono text-blue-200">{currentUserId}</span>
-              </span>
-              <button
-                onClick={handleLogout}
-                className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
-              >
-                Tancar Sessió
-              </button>
+      {/* Navbar */}
+      <nav className="bg-gradient-to-r from-blue-600 to-blue-800 shadow-lg sticky top-0 z-50">
+        <div className="container mx-auto px-4">
+          {/* Header principal */}
+          <div className="flex justify-between items-center py-4">
+            {/* Logo y título */}
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-lg">G</span>
+              </div>
+              <h1 className="text-white text-xl sm:text-2xl font-bold">Gym Instructor</h1>
             </div>
-          ) : (
-            <button
-              onClick={() => setShowAuthModal(true)}
-              className="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm mb-2 md:mb-0" // Added mb-2 md:mb-0
-            >
-              Iniciar Sessió / Registrar-se
-            </button>
-          )}
-          <div className="flex flex-wrap justify-center space-x-2 md:space-x-4"> {/* Changed space-x-4 to space-x-2 on mobile, added flex-wrap and justify-center */}
-            <button onClick={() => setCurrentPage('dashboard')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Dashboard</button>
-            <button onClick={() => setCurrentPage('programs')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Programes</button>
-            <button onClick={() => setCurrentPage('schedule')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Calendari</button>
-            <button onClick={() => setCurrentPage('users')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Usuaris</button>
-            <button onClick={() => setCurrentPage('mixes')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Vacances</button>
-            <button onClick={() => setCurrentPage('monthlyReport')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Informe Mensual</button>
-            <button onClick={() => setCurrentPage('settings')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Configuració</button>
+
+            {/* Botón hamburguesa para móvil */}
+            {isMobile && (
+              <button
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="text-white p-2 rounded-md hover:bg-white hover:bg-opacity-20 transition-colors"
+                aria-label="Toggle menu"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth="2" 
+                    d={showMobileMenu ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"}
+                  />
+                </svg>
+              </button>
+            )}
+
+            {/* Información de usuario y logout para desktop */}
+            {!isMobile && currentUserId && (
+              <div className="flex items-center space-x-4">
+                <span className="text-white text-sm">
+                  ID: <span className="font-mono text-blue-200">{currentUserId.substring(0, 8)}...</span>
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
+                >
+                  Tancar Sessió
+                </button>
+              </div>
+            )}
+
+            {/* Botón login para desktop cuando no hay usuario */}
+            {!isMobile && !currentUserId && (
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
+              >
+                Iniciar Sessió
+              </button>
+            )}
           </div>
+
+          {/* Menú de navegación para desktop */}
+          {!isMobile && currentUserId && (
+            <div className="border-t border-white border-opacity-20 py-3">
+              <div className="flex flex-wrap gap-2 sm:gap-4 justify-center">
+                {menuItems.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => handlePageChange(item.id)}
+                    className={`
+                      flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200
+                      ${currentPage === item.id
+                        ? 'bg-white bg-opacity-20 text-white'
+                        : 'text-blue-100 hover:text-white hover:bg-white hover:bg-opacity-10'
+                      }
+                    `}
+                  >
+                    <span className="text-sm">{item.icon}</span>
+                    <span className="hidden sm:inline">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Menú móvil desplegable */}
+        {isMobile && showMobileMenu && (
+          <div className="border-t border-white border-opacity-20 bg-blue-700 bg-opacity-95">
+            <div className="container mx-auto px-4 py-4">
+              {/* Información del usuario en móvil */}
+              {currentUserId ? (
+                <>
+                  <div className="mb-4 pb-4 border-b border-white border-opacity-20">
+                    <div className="text-white text-sm mb-2">
+                      Usuario ID: <span className="font-mono text-blue-200">{currentUserId.substring(0, 12)}...</span>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm w-full"
+                    >
+                      Tancar Sessió
+                    </button>
+                  </div>
+                  
+                  {/* Items del menú en móvil */}
+                  <div className="space-y-2">
+                    {menuItems.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => handlePageChange(item.id)}
+                        className={`
+                          w-full flex items-center space-x-3 px-3 py-3 rounded-md text-left transition-colors duration-200
+                          ${currentPage === item.id
+                            ? 'bg-white bg-opacity-20 text-white'
+                            : 'text-blue-100 hover:text-white hover:bg-white hover:bg-opacity-10'
+                          }
+                        `}
+                      >
+                        <span className="text-lg">{item.icon}</span>
+                        <span className="font-medium">{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <button
+                  onClick={() => {
+                    setShowAuthModal(true);
+                    setShowMobileMenu(false);
+                  }}
+                  className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm w-full"
+                >
+                  Iniciar Sessió / Registrar-se
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </nav>
 
+      {/* Overlay para cerrar el menú móvil */}
+      {isMobile && showMobileMenu && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-25 z-40"
+          onClick={() => setShowMobileMenu(false)}
+        />
+      )}
+
+      {/* Contenido principal */}
       <main className="flex-grow">
         {renderPage()}
       </main>
 
+      {/* Footer */}
       <footer className="bg-gray-800 text-white p-4 text-center text-sm">
         <div className="container mx-auto">
           © 2025 Gym Instructor App. Tots els drets reservats.
         </div>
       </footer>
 
+      {/* Modal de mensajes */}
       {showMessageModal && (
         <MessageModal
           show={showMessageModal}
