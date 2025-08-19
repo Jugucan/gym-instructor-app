@@ -1,7 +1,7 @@
 // scheduleHelpers.jsx
 // Utility functions for managing schedule logic.
 
-import { normalizeDateToStartOfDay } from './dateHelpers.jsx'; // Changed .js to .jsx
+import { normalizeDateToStartOfDay } from './dateHelpers.jsx'; // Corrected to .jsx
 
 /**
  * Finds the most recent active fixed schedule for a given date.
