@@ -9,7 +9,7 @@ import Programs from './components/programs/Programs.jsx';
 import ProgramDetail from './components/programs/ProgramDetail.jsx';
 import Schedule from './components/schedule/Schedule.jsx';
 import Users from './components/users/Users.jsx';
-import GymsAndHolidays from './components/gyms-holidays/GymsAndHolidays.jsx'; // Corrected: changed _ to -
+import GymsAndHolidays from './components/gyms_holidays/GymsAndHolidays.jsx';
 import Mixes from './components/mixes/Mixes.jsx';
 import Settings from './components/settings/Settings.jsx';
 import FixedScheduleManagement from './components/schedule/FixedScheduleManagement.jsx';
@@ -18,7 +18,7 @@ import MonthlyReport from './components/reports/MonthlyReport.jsx';
 import Auth from './components/auth/Auth.jsx'; // New Auth component
 
 // Importa els helpers i hooks (ara amb .jsx)
-import useFirestoreData from './hooks/useFirestoreData.jsx'; // Changed .js to .jsx
+import useFirestoreData from './hooks/useFirestoreData.jsx';
 import { MessageModal } from './components/common/MessageModal.jsx';
 
 
@@ -43,6 +43,9 @@ function App() {
     const initializeFirebase = async () => {
       try {
         const env = import.meta.env || {};
+        console.log("VITE_FIREBASE_CONFIG:", env.VITE_FIREBASE_CONFIG);
+        console.log("VITE_APP_ID:", env.VITE_APP_ID);
+
         const rawFirebaseConfig = env.VITE_FIREBASE_CONFIG;
         const envAppId = env.VITE_APP_ID || 'default-app-id';
         setAppId(envAppId);
@@ -265,10 +268,10 @@ function App() {
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
       <nav className="bg-gradient-to-r from-blue-600 to-blue-800 p-4 shadow-lg">
-        <div className="container mx-auto flex justify-between items-center">
-          <h1 className="text-white text-2xl font-bold">Gym Instructor</h1>
+        <div className="container mx-auto flex flex-col md:flex-row justify-between items-center"> {/* Added flex-col md:flex-row */}
+          <h1 className="text-white text-2xl font-bold mb-2 md:mb-0">Gym Instructor</h1> {/* Added mb-2 md:mb-0 */}
           {currentUserId ? (
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-4 mb-2 md:mb-0"> {/* Added mb-2 md:mb-0 */}
               <span className="text-white text-sm">
                 ID d'usuari: <span className="font-mono text-blue-200">{currentUserId}</span>
               </span>
@@ -282,20 +285,19 @@ function App() {
           ) : (
             <button
               onClick={() => setShowAuthModal(true)}
-              className="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
+              className="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm mb-2 md:mb-0" // Added mb-2 md:mb-0
             >
               Iniciar Sessió / Registrar-se
             </button>
           )}
-          <div className="space-x-4">
-            <button onClick={() => setCurrentPage('dashboard')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Dashboard</button>
-            <button onClick={() => setCurrentPage('programs')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Programes</button>
-            <button onClick={() => setCurrentPage('schedule')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Calendari</button>
-            <button onClick={() => setCurrentPage('users')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Usuaris</button>
-            <button onClick={() => setCurrentPage('mixes')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Mixos</button>
-            <button onClick={() => setCurrentPage('gymsAndHolidays')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Vacances</button>
-            <button onClick={() => setCurrentPage('monthlyReport')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Informe Mensual</button>
-            <button onClick={() => setCurrentPage('settings')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Configuració</button>
+          <div className="flex flex-wrap justify-center space-x-2 md:space-x-4"> {/* Changed space-x-4 to space-x-2 on mobile, added flex-wrap and justify-center */}
+            <button onClick={() => setCurrentPage('dashboard')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Dashboard</button>
+            <button onClick={() => setCurrentPage('programs')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Programes</button>
+            <button onClick={() => setCurrentPage('schedule')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Calendari</button>
+            <button onClick={() => setCurrentPage('users')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Usuaris</button>
+            <button onClick={() => setCurrentPage('mixes')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Vacances</button>
+            <button onClick={() => setCurrentPage('monthlyReport')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Informe Mensual</button>
+            <button onClick={() => setCurrentPage('settings')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium text-sm px-2 py-1 md:px-0 md:py-0">Configuració</button>
           </div>
         </div>
       </nav>
