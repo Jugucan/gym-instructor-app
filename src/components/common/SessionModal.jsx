@@ -45,7 +45,7 @@ export const SessionModal = ({ show, onClose, onSave, selectedDate, sessionsForD
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex justify-center items-center p-4 z-50 font-inter">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto"> {/* Added max-h and overflow */}
         <h2 className="text-xl font-bold text-gray-800 mb-4">
           Gestionar Sessions per a {selectedDate ? getLocalDateString(selectedDate) : ''}
         </h2>
