@@ -1,4 +1,4 @@
-// Dashboard.jsx
+// src/components/dashboard/Dashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDoc, updateDoc, collection, query, where, getDocs, onSnapshot, addDoc, deleteDoc } from 'firebase/firestore'; // Added addDoc, deleteDoc
@@ -6,7 +6,7 @@ import { initializeApp } from 'firebase/app';
 import { getLocalDateString, normalizeDateToStartOfDay, formatDate, parseDateString } from '../../utils/dateHelpers.jsx';
 import { FaUserEdit, FaSave, FaTimesCircle, FaPlusCircle, FaTrashAlt } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext'; // <--- LÍNIA CLAU ACTUALITZADA: canviat '../../AuthContext' per '../../contexts/AuthContext'
+import { useAuth } from '../../contexts/AuthContext'; // <--- LÍNIA CLAU ACTUALITZADA: Aquesta és la ruta correcta per a src/contexts/AuthContext.jsx
 
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 const app = initializeApp(firebaseConfig);
@@ -15,8 +15,7 @@ const auth = getAuth(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 const Dashboard = () => {
-    const { currentUser, signIn } = useAuth();
-    const [userId, setUserId] = useState(null);
+    const { currentUser, signIn, userId } = useAuth(); // Afegim userId del context per a consistència
     const [userData, setUserData] = useState(null);
     const [editMode, setEditMode] = useState(false);
     const [formData, setFormData] = useState({}); // Initialize as object
@@ -27,34 +26,28 @@ const Dashboard = () => {
     const [message, setMessage] = useState('');
 
     useEffect(() => {
-        const unsubscribe = auth.onAuthStateChanged(async (user) => {
-            if (user) {
-                setUserId(user.uid);
-                await fetchUserData(user.uid);
-                // Ensure fetchClients is called only if userId is available and authenticated
-                const clientUnsubscribe = await fetchClients(user.uid);
-                // Return cleanup function for clientUnsubscribe if it exists
-                return () => {
-                    if (clientUnsubscribe) clientUnsubscribe();
-                    unsubscribe();
-                };
-            } else {
-                try {
-                    await signIn();
-                    // After anonymous sign-in, auth.onAuthStateChanged will trigger again with the new user
-                } catch (anonError) {
-                    console.error("Error signing in anonymously:", anonError);
-                    setError("Could not sign in. Please try again later.");
-                    setLoading(false);
-                }
-            }
-            if (!user) setLoading(false); // Only set loading false if no user found initially
-        });
+        // useAuth ja gestiona la càrrega inicial i l'autenticació.
+        // Aquí, només reaccionem a quan l'usuari (i per tant userId) estan disponibles.
+        if (!userId) {
+            // Si useAuth ja ha intentat autenticar-se i no hi ha usuari, mostra l'error o missatge de càrrega.
+            // Si useAuth encara està carregant, 'loading' serà true i es mostrarà el missatge de càrrega global.
+            setLoading(false); // Ja no estem "carregant" a nivell de Dashboard si AuthProvider ja ha fet la seva feina.
+            return;
+        }
 
-        // Cleanup for the main authStateChanged listener
-        return () => unsubscribe();
-    }, [signIn]);
+        const loadDashboardData = async () => {
+            setLoading(true);
+            await fetchUserData(userId);
+            const unsubscribeClients = await fetchClients(userId);
+            setLoading(false);
+            return () => {
+                if (unsubscribeClients) unsubscribeClients();
+            };
+        };
 
+        loadDashboardData();
+
+    }, [userId]); // Executa aquest efecte quan el userId del context canviï
 
     const fetchUserData = async (currentUserId) => {
         try {
@@ -163,18 +156,24 @@ const Dashboard = () => {
         }
     };
 
-    if (loading) {
-        return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">Loading...</div>;
+    // Redirigir si no hi ha usuari un cop ha carregat
+    if (!userId && !loading) {
+        return <Navigate to="/" />;
     }
+
+    if (loading) {
+        return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">Carregant dades del panell...</div>;
+    }
+
 
     return (
         <div className="min-h-screen bg-gray-900 text-white p-4 sm:p-6 lg:p-8 flex flex-col items-center">
             <header className="w-full max-w-4xl bg-gray-800 p-4 rounded-lg shadow-lg mb-8 flex flex-col sm:flex-row justify-between items-center">
-                <h1 className="text-3xl font-bold text-teal-400 mb-4 sm:mb-0">Your Dashboard</h1>
+                <h1 className="text-3xl font-bold text-teal-400 mb-4 sm:mb-0">El teu Panell</h1>
                 <nav className="flex space-x-4">
-                    <Link to="/profile" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition duration-200">Profile</Link>
+                    <Link to="/profile" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition duration-200">Perfil</Link>
                     <Link to="/clients" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition duration-200">Clients</Link>
-                    <Link to="/routines" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition duration-200">Routines</Link>
+                    <Link to="/routines" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition duration-200">Rutines</Link>
                 </nav>
             </header>
 
@@ -184,13 +183,13 @@ const Dashboard = () => {
 
                 <section className="mb-8">
                     <h2 className="text-2xl font-semibold text-teal-300 mb-4 flex justify-between items-center">
-                        Personal Information
+                        Informació Personal
                         {!editMode ? (
                             <button
                                 onClick={() => setEditMode(true)}
                                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition duration-200 flex items-center"
                             >
-                                <FaUserEdit className="mr-2" /> Edit Profile
+                                <FaUserEdit className="mr-2" /> Editar Perfil
                             </button>
                         ) : (
                             <div className="flex space-x-2">
@@ -198,20 +197,20 @@ const Dashboard = () => {
                                     onClick={handleSave}
                                     className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition duration-200 flex items-center"
                                 >
-                                    <FaSave className="mr-2" /> Save
+                                    <FaSave className="mr-2" /> Guardar
                                 </button>
                                 <button
                                     onClick={handleCancel}
                                     className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition duration-200 flex items-center"
                                 >
-                                    <FaTimesCircle className="mr-2" /> Cancel
+                                    <FaTimesCircle className="mr-2" /> Cancel·lar
                                 </button>
                             </div>
                         )}
                     </h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-gray-400 text-sm font-bold mb-2">Name:</label>
+                            <label className="block text-gray-400 text-sm font-bold mb-2">Nom:</label>
                             {editMode ? (
                                 <input
                                     type="text"
@@ -239,7 +238,7 @@ const Dashboard = () => {
                             )}
                         </div>
                         <div>
-                            <label className="block text-gray-400 text-sm font-bold mb-2">Phone:</label>
+                            <label className="block text-gray-400 text-sm font-bold mb-2">Telèfon:</label>
                             {editMode ? (
                                 <input
                                     type="text"
@@ -258,11 +257,11 @@ const Dashboard = () => {
                 <hr className="my-8 border-gray-700" />
 
                 <section className="mb-8">
-                    <h2 className="text-2xl font-semibold text-teal-300 mb-4">Your Clients</h2>
+                    <h2 className="text-2xl font-semibold text-teal-300 mb-4">Els teus Clients</h2>
                     <div className="flex mb-4">
                         <input
                             type="text"
-                            placeholder="New client name"
+                            placeholder="Nom del nou client"
                             value={newClientName}
                             onChange={(e) => setNewClientName(e.target.value)}
                             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline mr-2 bg-gray-700 border-gray-600"
@@ -271,18 +270,18 @@ const Dashboard = () => {
                             onClick={handleAddClient}
                             className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition duration-200 flex items-center"
                         >
-                            <FaPlusCircle className="mr-2" /> Add Client
+                            <FaPlusCircle className="mr-2" /> Afegir Client
                         </button>
                     </div>
                     {clients.length === 0 ? (
-                        <p className="text-gray-400">No clients added yet.</p>
+                        <p className="text-gray-400">Encara no s'han afegit clients.</p>
                     ) : (
                         <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                             {clients.map((client) => (
                                 <li key={client.id} className="bg-gray-700 p-4 rounded-lg shadow-md flex justify-between items-center">
                                     <div>
                                         <p className="text-xl font-medium">{client.name}</p>
-                                        <p className="text-sm text-gray-400">Added: {client.createdAt ? formatDate(client.createdAt.toDate(), 'DD/MM/YYYY') : 'N/A'}</p>
+                                        <p className="text-sm text-gray-400">Afegit: {client.createdAt ? formatDate(client.createdAt.toDate(), 'DD/MM/YYYY') : 'N/A'}</p>
                                     </div>
                                     <button
                                         onClick={() => handleDeleteClient(client.id)}
@@ -299,16 +298,16 @@ const Dashboard = () => {
                 <hr className="my-8 border-gray-700" />
 
                 <section>
-                    <h2 className="text-2xl font-semibold text-teal-300 mb-4">Quick Actions</h2>
+                    <h2 className="text-2xl font-semibold text-teal-300 mb-4">Accions Ràpides</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                         <Link to="/clients" className="block p-4 bg-gray-700 hover:bg-gray-600 rounded-lg shadow-md text-center transition duration-200">
-                            Manage Clients
+                            Gestionar Clients
                         </Link>
                         <Link to="/routines" className="block p-4 bg-gray-700 hover:bg-gray-600 rounded-lg shadow-md text-center transition duration-200">
-                            View Routines
+                            Veure Rutines
                         </Link>
                         <Link to="/create-routine" className="block p-4 bg-gray-700 hover:bg-gray-600 rounded-lg shadow-md text-center transition duration-200">
-                            Create New Routine
+                            Crear Nova Rutina
                         </Link>
                     </div>
                 </section>
