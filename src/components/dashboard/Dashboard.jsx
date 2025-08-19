@@ -1,12 +1,12 @@
 // Dashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDoc, updateDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, collection, query, where, getDocs, onSnapshot, addDoc, deleteDoc } from 'firebase/firestore'; // Added addDoc, deleteDoc
 import { initializeApp } from 'firebase/app';
-import { getLocalDateString, normalizeDateToStartOfDay, formatDate, parseDateString } from '../../utils/dateHelpers.jsx'; // <--- LÍNIA CLAU ACTUALITZADA
+import { getLocalDateString, normalizeDateToStartOfDay, formatDate, parseDateString } from '../../utils/dateHelpers.jsx';
 import { FaUserEdit, FaSave, FaTimesCircle, FaPlusCircle, FaTrashAlt } from 'react-icons/fa';
-import { Link } from 'react-router-dom'; // Assuming react-router-dom is used for navigation
-import { useAuth } from '../AuthContext'; // Assuming you have an AuthContext
+import { Link } from 'react-router-dom';
+import { useAuth } from '../../AuthContext'; // <--- LÍNIA CLAU ACTUALITZADA: canviat '../AuthContext' per '../../AuthContext'
 
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 const app = initializeApp(firebaseConfig);
@@ -15,11 +15,11 @@ const auth = getAuth(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 const Dashboard = () => {
-    const { currentUser, signIn } = useAuth(); // Use useAuth hook for current user and signIn function
+    const { currentUser, signIn } = useAuth();
     const [userId, setUserId] = useState(null);
     const [userData, setUserData] = useState(null);
     const [editMode, setEditMode] = useState(false);
-    const [formData, setFormData] = useState({});
+    const [formData, setFormData] = {};
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [clients, setClients] = useState([]);
@@ -33,9 +33,8 @@ const Dashboard = () => {
                 await fetchUserData(user.uid);
                 await fetchClients(user.uid);
             } else {
-                // If not authenticated, try to sign in anonymously
                 try {
-                    await signIn(); // Call signIn from AuthContext
+                    await signIn();
                 } catch (anonError) {
                     console.error("Error signing in anonymously:", anonError);
                     setError("Could not sign in. Please try again later.");
@@ -46,7 +45,7 @@ const Dashboard = () => {
         });
 
         return () => unsubscribe();
-    }, [signIn]); // Depend on signIn from useAuth
+    }, [signIn]);
 
     const fetchUserData = async (currentUserId) => {
         try {
@@ -82,7 +81,7 @@ const Dashboard = () => {
                 setError("Error loading client data.");
             });
 
-            return unsubscribe; // Return the unsubscribe function for cleanup
+            return unsubscribe;
         } catch (err) {
             console.error("Error fetching clients:", err);
             setError("Error loading client data.");
@@ -273,7 +272,6 @@ const Dashboard = () => {
                                 <li key={client.id} className="bg-gray-700 p-4 rounded-lg shadow-md flex justify-between items-center">
                                     <div>
                                         <p className="text-xl font-medium">{client.name}</p>
-                                        {/* Using formatDate here is essential */}
                                         <p className="text-sm text-gray-400">Added: {client.createdAt ? formatDate(client.createdAt.toDate(), 'DD/MM/YYYY') : 'N/A'}</p>
                                     </div>
                                     <button
