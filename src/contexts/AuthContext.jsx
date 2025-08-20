@@ -17,8 +17,6 @@ const firebaseConfig = import.meta.env.VITE_FIREBASE_CONFIG
     : {};
 
 // Verificar si l'app ja està inicialitzada
-import { getApps, getApp } from 'firebase/app';
-
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 
