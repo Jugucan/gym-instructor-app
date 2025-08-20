@@ -1,6 +1,6 @@
 // src/contexts/AuthContext.jsx
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
 // Crear el context
@@ -16,7 +16,10 @@ const firebaseConfig = import.meta.env.VITE_FIREBASE_CONFIG
     ? JSON.parse(import.meta.env.VITE_FIREBASE_CONFIG) 
     : {};
 
-const app = initializeApp(firebaseConfig);
+// Verificar si l'app ja està inicialitzada
+import { getApps, getApp } from 'firebase/app';
+
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 
 export function AuthProvider({ children }) {
