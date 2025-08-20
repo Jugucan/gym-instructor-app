@@ -1,24 +1,20 @@
 // src/components/dashboard/Dashboard.jsx
 import React, { useState, useEffect } from 'react';
-import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDoc, updateDoc, collection, query, where, getDocs, onSnapshot, addDoc, deleteDoc } from 'firebase/firestore'; // Added addDoc, deleteDoc
-import { initializeApp } from 'firebase/app';
+import { doc, getDoc, setDoc, collection, query, onSnapshot, addDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '../../firebase.jsx'; // Importar des del fitxer centralitzat
 import { getLocalDateString, normalizeDateToStartOfDay, formatDate, parseDateString } from '../../utils/dateHelpers.jsx';
 import { FaUserEdit, FaSave, FaTimesCircle, FaPlusCircle, FaTrashAlt } from 'react-icons/fa';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext'; // <--- LÍNIA CLAU ACTUALITZADA: Aquesta és la ruta correcta per a src/contexts/AuthContext.jsx
+import { Link, Navigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+// Obtenir appId des de variables d'entorn
+const appId = import.meta.env.VITE_APP_ID || 'default-app-id';
 
 const Dashboard = () => {
-    const { currentUser, signIn, userId } = useAuth(); // Afegim userId del context per a consistència
+    const { currentUser, signIn, userId } = useAuth();
     const [userData, setUserData] = useState(null);
     const [editMode, setEditMode] = useState(false);
-    const [formData, setFormData] = useState({}); // Initialize as object
+    const [formData, setFormData] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [clients, setClients] = useState([]);
@@ -26,38 +22,46 @@ const Dashboard = () => {
     const [message, setMessage] = useState('');
 
     useEffect(() => {
-        // useAuth ja gestiona la càrrega inicial i l'autenticació.
-        // Aquí, només reaccionem a quan l'usuari (i per tant userId) estan disponibles.
+        console.log('Dashboard useEffect - userId:', userId);
+        
+        // Si no hi ha userId, no fem res
         if (!userId) {
-            // Si useAuth ja ha intentat autenticar-se i no hi ha usuari, mostra l'error o missatge de càrrega.
-            // Si useAuth encara està carregant, 'loading' serà true i es mostrarà el missatge de càrrega global.
-            setLoading(false); // Ja no estem "carregant" a nivell de Dashboard si AuthProvider ja ha fet la seva feina.
+            setLoading(false);
             return;
         }
 
         const loadDashboardData = async () => {
+            console.log('Loading dashboard data for user:', userId);
             setLoading(true);
             await fetchUserData(userId);
             const unsubscribeClients = await fetchClients(userId);
             setLoading(false);
+            
+            // Retornar funció de neteja
             return () => {
-                if (unsubscribeClients) unsubscribeClients();
+                if (unsubscribeClients) {
+                    console.log('Cleaning up clients listener');
+                    unsubscribeClients();
+                }
             };
         };
 
         loadDashboardData();
-
-    }, [userId]); // Executa aquest efecte quan el userId del context canviï
+    }, [userId]);
 
     const fetchUserData = async (currentUserId) => {
         try {
+            console.log('Fetching user data for:', currentUserId);
             const userDocRef = doc(db, `artifacts/${appId}/users/${currentUserId}/profile`, 'myProfile');
             const docSnap = await getDoc(userDocRef);
+            
             if (docSnap.exists()) {
-                setUserData(docSnap.data());
-                setFormData(docSnap.data());
+                const data = docSnap.data();
+                console.log('User data found:', data);
+                setUserData(data);
+                setFormData(data);
             } else {
-                console.log("No such document!");
+                console.log("No user profile document found, creating empty profile");
                 setUserData({});
                 setFormData({});
             }
@@ -69,6 +73,7 @@ const Dashboard = () => {
 
     const fetchClients = async (currentUserId) => {
         try {
+            console.log('Setting up clients listener for:', currentUserId);
             const clientsCollectionRef = collection(db, `artifacts/${appId}/users/${currentUserId}/clients`);
             const q = query(clientsCollectionRef);
             
@@ -77,13 +82,14 @@ const Dashboard = () => {
                     id: doc.id,
                     ...doc.data()
                 }));
+                console.log('Clients updated:', clientsList.length, 'clients');
                 setClients(clientsList);
             }, (err) => {
                 console.error("Error fetching clients in real-time:", err);
                 setError("Error loading client data.");
             });
 
-            return unsubscribe; // Return the unsubscribe function for cleanup
+            return unsubscribe;
         } catch (err) {
             console.error("Error fetching clients:", err);
             setError("Error loading client data.");
@@ -101,6 +107,7 @@ const Dashboard = () => {
             return;
         }
         try {
+            console.log('Saving user profile:', formData);
             const userDocRef = doc(db, `artifacts/${appId}/users/${userId}/profile`, 'myProfile');
             await setDoc(userDocRef, formData, { merge: true });
             setUserData(formData);
@@ -129,8 +136,12 @@ const Dashboard = () => {
             return;
         }
         try {
+            console.log('Adding new client:', newClientName.trim());
             const clientsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/clients`);
-            await addDoc(clientsCollectionRef, { name: newClientName.trim(), createdAt: new Date() });
+            await addDoc(clientsCollectionRef, { 
+                name: newClientName.trim(), 
+                createdAt: new Date() 
+            });
             setNewClientName('');
             setMessage("Client added successfully!");
             setTimeout(() => setMessage(''), 3000);
@@ -146,6 +157,7 @@ const Dashboard = () => {
             return;
         }
         try {
+            console.log('Deleting client:', clientId);
             const clientDocRef = doc(db, `artifacts/${appId}/users/${userId}/clients`, clientId);
             await deleteDoc(clientDocRef);
             setMessage("Client deleted successfully!");
@@ -158,13 +170,13 @@ const Dashboard = () => {
 
     // Redirigir si no hi ha usuari un cop ha carregat
     if (!userId && !loading) {
+        console.log('No user and not loading, redirecting to home');
         return <Navigate to="/" />;
     }
 
     if (loading) {
         return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">Carregant dades del panell...</div>;
     }
-
 
     return (
         <div className="min-h-screen bg-gray-900 text-white p-4 sm:p-6 lg:p-8 flex flex-col items-center">
