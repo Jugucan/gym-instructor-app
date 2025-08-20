@@ -1,8 +1,4 @@
 // src/contexts/AuthContext.jsx
-console.log('VITE_FIREBASE_CONFIG:', import.meta.env.VITE_FIREBASE_CONFIG);
-console.log('Firebase config parsed:', firebaseConfig);
-console.log('Existing apps:', getApps().length);
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -15,19 +11,40 @@ export function useAuth() {
     return useContext(AuthContext);
 }
 
-// Obtenir la configuració de Firebase de les variables d'entorn
-const firebaseConfig = import.meta.env.VITE_FIREBASE_CONFIG 
-    ? JSON.parse(import.meta.env.VITE_FIREBASE_CONFIG) 
-    : {};
+// Funcions per inicialitzar Firebase de manera segura
+function initializeFirebaseApp() {
+    // Debug logs
+    console.log('VITE_FIREBASE_CONFIG:', import.meta.env.VITE_FIREBASE_CONFIG);
+    
+    // Obtenir la configuració de Firebase de les variables d'entorn
+    const firebaseConfig = import.meta.env.VITE_FIREBASE_CONFIG 
+        ? JSON.parse(import.meta.env.VITE_FIREBASE_CONFIG) 
+        : {};
+    
+    console.log('Firebase config parsed:', firebaseConfig);
+    console.log('Existing apps:', getApps().length);
+    
+    // Verificar si l'app ja està inicialitzada
+    let app;
+    if (getApps().length === 0) {
+        app = initializeApp(firebaseConfig);
+        console.log('Firebase app initialized');
+    } else {
+        app = getApp();
+        console.log('Using existing Firebase app');
+    }
+    
+    return app;
+}
 
-// Verificar si l'app ja està inicialitzada
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
+// Inicialitzar Firebase
+const firebaseApp = initializeFirebaseApp();
+const auth = getAuth(firebaseApp);
 
 export function AuthProvider({ children }) {
     const [currentUser, setCurrentUser] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [userId, setUserId] = useState(null); // Afegit per tenir l'userId disponible al context
+    const [userId, setUserId] = useState(null);
 
     // Funció per iniciar sessió anònimament o amb un token personalitzat
     const signIn = async () => {
@@ -40,15 +57,16 @@ export function AuthProvider({ children }) {
             }
         } catch (error) {
             console.error("Error during authentication:", error);
-            throw error; // Propagar l'error perquè els components puguin gestionar-lo
+            throw error;
         }
     };
 
     useEffect(() => {
         // Escolta els canvis en l'estat d'autenticació
         const unsubscribe = onAuthStateChanged(auth, (user) => {
+            console.log('Auth state changed:', user ? user.uid : 'no user');
             setCurrentUser(user);
-            setUserId(user ? user.uid : null); // Actualitzar userId al context
+            setUserId(user ? user.uid : null);
             setLoading(false);
         });
 
@@ -59,15 +77,14 @@ export function AuthProvider({ children }) {
     // Proporcionar el valor del context a tots els components fills
     const value = {
         currentUser,
-        userId, // Fer l'userId disponible
+        userId,
         loading,
-        signIn // Afegir la funció de signIn al context
+        signIn
     };
 
     return (
         <AuthContext.Provider value={value}>
-            {!loading && children} {/* Renderitzar els fills només quan l'estat d'autenticació s'hagi carregat */}
+            {!loading && children}
         </AuthContext.Provider>
     );
 }
-
