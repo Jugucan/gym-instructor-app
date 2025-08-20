@@ -11,8 +11,11 @@ export function useAuth() {
     return useContext(AuthContext);
 }
 
-// Obtenir la configuració de Firebase de les variables globals
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+// Obtenir la configuració de Firebase de les variables d'entorn
+const firebaseConfig = import.meta.env.VITE_FIREBASE_CONFIG 
+    ? JSON.parse(import.meta.env.VITE_FIREBASE_CONFIG) 
+    : {};
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
@@ -24,7 +27,7 @@ export function AuthProvider({ children }) {
     // Funció per iniciar sessió anònimament o amb un token personalitzat
     const signIn = async () => {
         try {
-            const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+            const initialAuthToken = import.meta.env.VITE_INITIAL_AUTH_TOKEN || null;
             if (initialAuthToken) {
                 await signInWithCustomToken(auth, initialAuthToken);
             } else {
