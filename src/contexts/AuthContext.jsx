@@ -1,4 +1,8 @@
 // src/contexts/AuthContext.jsx
+console.log('VITE_FIREBASE_CONFIG:', import.meta.env.VITE_FIREBASE_CONFIG);
+console.log('Firebase config parsed:', firebaseConfig);
+console.log('Existing apps:', getApps().length);
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -66,3 +70,4 @@ export function AuthProvider({ children }) {
         </AuthContext.Provider>
     );
 }
+
