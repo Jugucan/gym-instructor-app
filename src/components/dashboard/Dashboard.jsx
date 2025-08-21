@@ -6,7 +6,7 @@ import { MessageModal } from '../common/MessageModal.jsx';
 import { SessionModal } from '../common/SessionModal.jsx';
 import { MissedDayModal } from '../common/MissedDayModal.jsx';
 
-const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, db, currentUserId, appId, dataLoaded }) => {
+const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, gymClosures, db, currentUserId, appId, dataLoaded }) => {
   const today = new Date();
   const todayNormalized = normalizeDateToStartOfDay(today);
   const todayStr = getLocalDateString(todayNormalized);
@@ -506,23 +506,39 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
               const dateStr = getLocalDateString(dateNormalized);
 
               const sessionsToDisplay = getSessionsForDate(date);
-
+              
+              const isGymClosure = gymClosures.some(gc => getLocalDateString(new Date(gc.date)) === dateStr);
               const isHoliday = gyms.some(gym => gym.holidaysTaken.includes(dateStr));
-              const isGymClosure = false;
               const isMissed = missedDays.some(md => normalizeDateToStartOfDay(new Date(md.date)).getTime() === dateNormalized.getTime());
+
+              let dayClass = 'bg-gray-100';
+              let tooltipText = '';
+              let badgeText = '';
+
+              if (dateStr === getLocalDateString(normalizeDateToStartOfDay(new Date()))) {
+                  dayClass = 'bg-blue-200 border border-blue-500';
+              }
+              
+              if (isMissed) {
+                  dayClass = 'bg-red-100 border border-red-400';
+                  badgeText = 'No assistit';
+              }
+              if (isHoliday) {
+                  dayClass = 'bg-red-200 border border-red-500';
+                  badgeText = 'Vacances';
+              }
+              if (isGymClosure) {
+                  dayClass = 'bg-purple-200 border border-purple-500';
+                  badgeText = 'Festiu';
+              }
 
               return (
                 <div
                   key={dateStr}
-                  className={`p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[60px]
-                    ${dateStr === getLocalDateString(normalizeDateToStartOfDay(new Date())) ? 'bg-blue-200 border border-blue-500' : 'bg-gray-100'}
-                    ${isHoliday ? 'bg-red-200 border border-red-500' : ''}
-                    ${isGymClosure ? 'bg-purple-200 border border-purple-500' : ''}
-                    ${isMissed ? 'bg-red-100 border border-red-400' : ''}
-                  `}
+                  className={`p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[60px] ${dayClass}`}
                 >
                   <span className="font-bold">{date.getDate()}</span>
-                  {sessionsToDisplay.length > 0 && (
+                  {sessionsToDisplay.length > 0 && !isHoliday && !isGymClosure && (
                     <div className="flex flex-wrap justify-center mt-1">
                       {sessionsToDisplay.slice(0, 2).map((session, sIdx) => {
                         const program = programs.find(p => p.id === session.programId);
@@ -537,13 +553,8 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
                       )}
                     </div>
                   )}
-                  {isHoliday && <span className="text-[10px] text-red-700 mt-1">Vacances</span>}
-                  {isGymClosure && <span className="text-[10px] text-purple-700 mt-1">Tancat</span>}
-                  {isMissed && (
-                    <span className="absolute top-1 left-1 text-xs text-red-600" title="Dia no assistit">
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
-                    </span>
-                  )}
+                  {badgeText && <span className="text-[10px] mt-1 font-semibold text-gray-700">{badgeText}</span>}
+                  
                   <div className="absolute bottom-1 left-0 right-0 flex justify-center space-x-1">
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDayClick(date); }}
