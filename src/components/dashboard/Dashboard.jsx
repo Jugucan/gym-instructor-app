@@ -2,36 +2,39 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, onSnapshot, updateDoc, deleteDoc, addDoc, getDocs, doc, where } from 'firebase/firestore';
 import { getLocalDateString, normalizeDateToStartOfDay, formatDate } from '../../utils/dateHelpers.jsx';
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
-import { MessageModal } from '../common/MessageModal.jsx';
-import { SessionModal } from '../common/SessionModal.jsx';
-import { MissedDayModal } from '../common/MissedDayModal.jsx';
+import { MessageModal } from '../common/MessageModal.jsx'; // Import MessageModal
+import { SessionModal } from '../common/SessionModal.jsx'; // Ensure SessionModal is imported
+import { MissedDayModal } from '../common/MissedDayModal.jsx'; // Ensure MissedDayModal is imported
 
-const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, db, currentUserId, appId, dataLoaded }) => {
-  const today = new Date();
+const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, db, currentUserId, appId }) => {
+  const today = new Date(); // Use actual current date
   const todayNormalized = normalizeDateToStartOfDay(today);
-  const todayStr = getLocalDateString(todayNormalized);
+  const todayStr = getLocalDateString(todayNormalized); // Use getLocalDateString for consistent string format
   const daysOfWeekNames = ['Diumenge', 'Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte'];
 
+  // State for calendar interactions within Dashboard
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [sessionsForDay, setSessionsForDay] = useState([]);
+  const [sessionsForDay, setSessionsForDay] = useState([]); // Sessions for the selected date
   const [showMissedDayModal, setShowMissedDayModal] = useState(false);
   const [missedDayDate, setMissedDayDate] = useState(null);
-  const [missedDayDocId, setMissedDayDocId] = useState(null);
-  const [existingMissedGymId, setExistingMissedGymId] = useState('');
-  const [existingMissedNotes, setExistingMissedNotes] = useState('');
+  const [missedDayDocId, setMissedDayDocId] = useState(null); // ID of the missed day document if editing
+  const [existingMissedGymId, setExistingMissedGymId] = useState(''); // Existing gym for missed day
+  const [existingMissedNotes, setExistingMissedNotes] = useState(''); // Existing notes for missed day
+
 
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
-  const getUserPath = (collectionName) => {
+  const getUserPath = (collectionName) => { // Renamed to avoid conflict with imported getUserCollectionPath
     if (!currentUserId || !appId) {
       console.error("currentUserId or appId is not available for collection path.");
       return null;
     }
-    return getUserCollectionPath(appId, currentUserId, collectionName);
+    return getUserCollectionPath(appId, currentUserId, collectionName); // Use the imported helper
   };
 
+  // Helper to get sessions for a specific date (combining fixed, recurring, and overrides)
   const getSessionsForDate = (date) => {
     const dateNormalized = normalizeDateToStartOfDay(date);
     const dayOfWeek = dateNormalized.getDay();
@@ -47,13 +50,14 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
       const recStartDateNormalized = normalizeDateToStartOfDay(new Date(rec.startDate));
       const recEndDateNormalized = rec.endDate ? normalizeDateToStartOfDay(new Date(rec.endDate)) : null;
       return rec.daysOfWeek.includes(dayName) &&
-                dateNormalized.getTime() >= recStartDateNormalized.getTime() &&
-                (!recEndDateNormalized || dateNormalized.getTime() <= recEndDateNormalized.getTime());
+             dateNormalized.getTime() >= recStartDateNormalized.getTime() &&
+             (!recEndDateNormalized || dateNormalized.getTime() <= recEndDateNormalized.getTime());
     });
 
     const override = scheduleOverrides.find(so => normalizeDateToStartOfDay(new Date(so.date)).getTime() === dateNormalized.getTime());
 
     if (override) {
+      // Ensure sessions have a temporary ID for keying in React if they don't from Firestore
       return override.sessions.map(s => ({ ...s, id: s.id || `override_${Date.now()}_${Math.random()}`, isOverride: true }));
     } else {
       const combinedSessions = [...fixedDaySessions, ...recurringSessionsForDay];
@@ -62,11 +66,12 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
       combinedSessions.forEach(session => {
         const key = `${session.programId}-${session.time}-${session.gymId}`;
         if (!seen.has(key)) {
+          // Ensure session has an ID for keying in React if it doesn't from Firestore
           uniqueSessions.push({ ...session, id: session.id || `fixed_rec_${Date.now()}_${Math.random()}` });
           seen.add(key);
         }
       });
-      return uniqueSessions.map(s => ({ ...s, isFixedOrRecurring: true }));
+      return uniqueSessions.map(s => ({ ...s, isFixedOrRecurring: true })); // Mark type
     }
   };
 
@@ -76,8 +81,8 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
     setSessionsForDay(sessions);
     setShowSessionModal(true);
   };
-
-  const handleSaveDaySessions = async (updatedSessions) => {
+  
+  const handleSaveDaySessions = async (updatedSessions) => { // Accepts updatedSessions directly from SessionModal
     if (!selectedDate || !db || !currentUserId || !appId) {
       setMessageModalContent({
         title: 'Error de Connexió',
@@ -89,6 +94,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
       return;
     }
 
+    // Validate sessions (programId, time, gymId must be present for valid sessions)
     const sessionsToSave = updatedSessions.filter(s => s.programId && s.time && s.gymId);
 
     const dateToSave = getLocalDateString(selectedDate);
@@ -103,19 +109,21 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
       const querySnapshot = await getDocs(existingOverrideQuery);
 
       if (!querySnapshot.empty) {
+        // Update existing override
         const overrideDocRef = doc(db, scheduleOverridesCollectionPath, querySnapshot.docs[0].id);
         if (sessionsToSave.length > 0) {
           await updateDoc(overrideDocRef, {
-            sessions: sessionsToSave.map(({ id, isNew, isOverride, isFixedOrRecurring, ...rest }) => rest),
+            sessions: sessionsToSave.map(({ id, isNew, isOverride, isFixedOrRecurring, ...rest }) => rest), // Remove temp IDs and flags
           });
         } else {
-          await deleteDoc(overrideDocRef);
+          await deleteDoc(overrideDocRef); // Delete override if no sessions left
         }
       } else {
+        // Add new override only if there are sessions to save
         if (sessionsToSave.length > 0) {
           await addDoc(collection(db, scheduleOverridesCollectionPath), {
             date: dateToSave,
-            sessions: sessionsToSave.map(({ id, isNew, isOverride, isFixedOrRecurring, ...rest }) => rest),
+            sessions: sessionsToSave.map(({ id, isNew, isOverride, isFixedOrRecurring, ...rest }) => rest), // Remove temp IDs and flags
           });
         }
       }
@@ -154,6 +162,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
     setShowMissedDayModal(true);
   };
 
+
   const handleAddMissedDay = async ({ date, gymId, notes }) => {
     if (!db || !currentUserId || !appId) {
       setMessageModalContent({
@@ -172,14 +181,17 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
       const newMissedDay = { date, gymId, notes };
 
       if (missedDayDocId) {
+        // Update existing missed day
         await updateDoc(doc(db, missedDaysCollectionPath, missedDayDocId), newMissedDay);
         setMessageModalContent({
           title: 'Dia No Assistit Actualitzat',
-          message: `El dia ${getLocalDateString(new Date(date))} s'ha actualitzat correctament.`,
+          message: `El dia ${formatDate(date)} s'ha actualitzat correctament.`,
           isConfirm: false,
           onConfirm: () => setShowMessageModal(false),
         });
       } else {
+        // Add new missed day
+        // Check if this date and gymId combo already exists to prevent duplicates
         const existingMissedDayQuery = query(
           collection(db, missedDaysCollectionPath),
           where('date', '==', date),
@@ -200,7 +212,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
         await addDoc(collection(db, missedDaysCollectionPath), newMissedDay);
         setMessageModalContent({
           title: 'Dia No Assistit Registrat',
-          message: `El dia ${getLocalDateString(new Date(date))} s'ha marcat com a no assistit correctament.`,
+          message: `El dia ${formatDate(date)} s'ha marcat com a no assistit correctament.`,
           isConfirm: false,
           onConfirm: () => setShowMessageModal(false),
         });
@@ -241,7 +253,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
           if (!missedDaysCollectionPath) return;
 
           await deleteDoc(doc(db, missedDaysCollectionPath, docId));
-          setShowMessageModal(false);
+          setShowMessageModal(false); // Close confirm modal
           setMessageModalContent({
             title: 'Dia Desmarcat',
             message: 'El dia s\'ha desmarcat com a no assistit correctament.',
@@ -249,7 +261,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
             onConfirm: () => setShowMessageModal(false),
           });
           setShowMessageModal(true);
-          setShowMissedDayModal(false);
+          setShowMissedDayModal(false); // Close missed day modal after unmarking
         } catch (error) {
           console.error("Error unmarking missed day:", error);
           setMessageModalContent({
@@ -266,32 +278,35 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
     setShowMessageModal(true);
   };
 
+
+  // Calculate programs in current rotation
   const programsInRotation = programs.map(program => {
     const relevantSessions = scheduleOverrides.filter(so => so.sessions.some(s => s.programId === program.id))
-                               .flatMap(so => so.sessions.map(s => ({ date: so.date, programId: s.programId })))
-                               .concat(
-                                 fixedSchedules.flatMap(fs =>
-                                   Object.values(fs.schedule).flat().map(s => ({ date: fs.startDate, programId: s.programId }))
-                                 )
-                               )
-                               .concat(
-                                 recurringSessions.flatMap(rs =>
-                                   [{ date: rs.startDate, programId: rs.programId }]
-                                 )
-                               )
-                               .filter(s => s.programId === program.id);
+                              .flatMap(so => so.sessions.map(s => ({ date: so.date, programId: s.programId })))
+                              .concat(
+                                fixedSchedules.flatMap(fs => 
+                                  Object.values(fs.schedule).flat().map(s => ({ date: fs.startDate, programId: s.programId })) // Using fixed schedule start date as a proxy
+                                )
+                              )
+                              .concat(
+                                recurringSessions.flatMap(rs => 
+                                  [{ date: rs.startDate, programId: rs.programId }] // Using recurring session start date as a proxy
+                                )
+                              )
+                              .filter(s => s.programId === program.id);
 
     if (relevantSessions.length === 0) return null;
 
     const sortedSessions = [...relevantSessions].sort((a, b) => new Date(b.date) - new Date(a.date));
     const lastSessionDate = new Date(sortedSessions[0].date);
 
+    // Find the start of the continuous usage period
     let startDate = lastSessionDate;
     for (let i = 0; i < sortedSessions.length - 1; i++) {
         const currentSessDate = new Date(sortedSessions[i].date);
         const nextSessDate = new Date(sortedSessions[i+1].date);
         const diffDays = Math.floor((currentSessDate - nextSessDate) / (1000 * 60 * 60 * 24));
-        if (diffDays > 7) {
+        if (diffDays > 7) { // Assuming "continuous" means no more than 7 days gap
             break;
         }
         startDate = nextSessDate;
@@ -304,6 +319,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
     };
   }).filter(Boolean).sort((a, b) => new Date(b.lastUsed) - new Date(a.lastUsed));
 
+  // Helper to calculate age
   const calculateAge = (birthday) => {
     if (!birthday) return 'N/A';
     const birthDate = new Date(birthday);
@@ -316,17 +332,23 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
     return age;
   };
 
+  // Upcoming and past birthdays (within a 7-day window)
   const relevantBirthdays = users.filter(user => {
-    const userBirthday = normalizeDateToStartOfDay(new Date(user.birthday));
+    const userBirthday = normalizeDateToStartOfDay(new Date(user.birthday)); // Ensure date object
+
+    // Calculate birthday date for the current year
     let bdayThisYear = new Date(todayNormalized.getFullYear(), userBirthday.getMonth(), userBirthday.getDate());
     bdayThisYear = normalizeDateToStartOfDay(bdayThisYear);
 
+    // Calculate birthday date for the previous year
     let bdayLastYear = new Date(todayNormalized.getFullYear() - 1, userBirthday.getMonth(), userBirthday.getDate());
     bdayLastYear = normalizeDateToStartOfDay(bdayLastYear);
 
+    // Calculate birthday date for the next year
     let bdayNextYear = new Date(todayNormalized.getFullYear() + 1, userBirthday.getMonth(), userBirthday.getDate());
     bdayNextYear = normalizeDateToStartOfDay(bdayNextYear);
 
+    // Check if any of these fall within the -7 to +7 day window from today
     const diffThisYear = Math.ceil((bdayThisYear.getTime() - todayNormalized.getTime()) / (1000 * 60 * 60 * 24));
     const diffLastYear = Math.ceil((bdayLastYear.getTime() - todayNormalized.getTime()) / (1000 * 60 * 60 * 24));
     const diffNextYear = Math.ceil((bdayNextYear.getTime() - todayNormalized.getTime()) / (1000 * 60 * 60 * 24));
@@ -337,6 +359,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
   }).sort((a, b) => {
     const todayMillis = todayNormalized.getTime();
 
+    // Function to get the closest birthday date in milliseconds
     const getClosestBirthdayMillis = (userBdayString) => {
       const userBday = normalizeDateToStartOfDay(new Date(userBdayString));
       const bdayThisYear = normalizeDateToStartOfDay(new Date(todayNormalized.getFullYear(), userBday.getMonth(), userBday.getDate()));
@@ -355,84 +378,98 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
     const aClosestMillis = getClosestBirthdayMillis(a.birthday);
     const bClosestMillis = getClosestBirthdayMillis(b.birthday);
 
+    // Primary sort: Past birthdays first (descending by date, so more recent past is higher)
+    // Then Today's birthdays
+    // Then Future birthdays (ascending by date)
+
     const aIsPast = aClosestMillis < todayMillis;
     const aIsToday = aClosestMillis === todayMillis;
     const bIsPast = bClosestMillis < todayMillis;
     const bIsToday = bClosestMillis === todayMillis;
 
-    if (aIsPast && !bIsPast) return -1;
-    if (!aIsPast && bIsPast) return 1;
+    // Sort order: Past (most recent first) -> Today -> Future (soonest first)
+    if (aIsPast && !bIsPast) return -1; // A is past, B is not -> A comes first
+    if (!aIsPast && bIsPast) return 1;  // B is past, A is not -> B comes first
 
-    if (aIsToday && !bIsToday) return -1;
-    if (!aIsToday && bIsToday) return 1;
+    if (aIsToday && !bIsToday) return -1; // A is today, B is not -> A comes first
+    if (!aIsToday && bIsToday) return 1;  // B is today, A is not -> B comes first
 
+    // If both are past, sort descending (more recent past first)
     if (aIsPast && bIsPast) {
       return bClosestMillis - aClosestMillis;
     }
 
+    // If both are today, sort by name
     if (aIsToday && bIsToday) {
       return a.name.localeCompare(b.name);
     }
 
+    // If both are future, sort ascending (soonest future first)
     if (!aIsPast && !aIsToday && !bIsPast && !bIsToday) {
       return aClosestMillis - bClosestMillis;
     }
 
-    return 0;
+    return 0; // Should not reach here if logic is exhaustive
   });
 
+
+  // Holiday summary
   const gymVacationSummary = gyms.map(gym => ({
     name: gym.name,
     remaining: gym.totalVacationDays - gym.holidaysTaken.length,
   }));
 
-  const currentMonth = todayNormalized;
+  // Mini Calendar (showing current month, fixed schedule and overrides)
+  const currentMonth = todayNormalized; // Start calendar from the actual 'today' month
   const currentYear = todayNormalized.getFullYear();
   const daysInMonth = new Date(currentYear, currentMonth.getMonth() + 1, 0).getDate();
-  const firstDayOfMonth = new Date(currentYear, currentMonth.getMonth(), 1).getDay();
+  const firstDayOfMonth = new Date(currentYear, currentMonth.getMonth(), 1).getDay(); // 0 for Sunday, 1 for Monday
 
   const calendarDays = [];
-  for (let i = 0; i < (firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1); i++) {
+  for (let i = 0; i < (firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1); i++) { // Adjust for Monday start (0=Sunday, 1=Monday -> so if Sunday, need 6 blanks, if Monday 0, if Tue 1, etc.)
     calendarDays.push(null);
   }
   for (let i = 1; i <= daysInMonth; i++) {
     calendarDays.push(new Date(currentYear, currentMonth.getMonth(), i));
   }
 
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-inter">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">Dashboard</h1>
       <p className="text-gray-600 text-sm mb-4">Data d'avui: <span className="font-semibold">{todayNormalized.toLocaleDateString('ca-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span></p>
 
+
       {/* Programs in Current Rotation */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Programes en Rotació Actual</h2>
-        {dataLoaded ? (
+        {programs.length > 0 ? ( // Changed from programsInRotation to programs to avoid initial empty state if data not loaded
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {programsInRotation.length > 0 ? programsInRotation.map(program => (
               <div key={program.id} className="p-4 rounded-lg flex items-center shadow-sm" style={{ backgroundColor: program.color + '20', borderLeft: `4px solid ${program.color}` }}>
                 <div className="flex-grow">
                   <p className="text-lg font-medium text-gray-800">{program.name}</p>
-                  <p className="text-sm text-gray-600">En ús des del: {getLocalDateString(new Date(program.currentRotationStartDate))}</p>
-                  <p className="text-sm text-gray-600">Última sessió: {getLocalDateString(new Date(program.lastUsed))}</p>
+                  <p className="text-sm text-gray-600">En ús des del: {formatDate(program.currentRotationStartDate)}</p>
+                  <p className="text-sm text-gray-600">Última sessió: {formatDate(program.lastUsed)}</p>
                 </div>
               </div>
             )) : <p className="text-gray-500">Encara no hi ha programes en rotació. Registra algunes sessions!</p>}
           </div>
         ) : (
-          <p className="text-gray-500">Carregant programes...</p>
+          <p className="text-gray-500">Carregant programes...</p> // Changed text for loading state
         )}
       </div>
 
       {/* Upcoming Birthdays */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Aniversaris Pròxims / Recents</h2>
-        {dataLoaded ? (
+        {users.length > 0 ? ( // Changed from relevantBirthdays to users
           <ul className="space-y-2">
             {relevantBirthdays.length > 0 ? relevantBirthdays.map(user => {
-              const userBirthday = normalizeDateToStartOfDay(new Date(user.birthday));
+              const userBirthday = normalizeDateToStartOfDay(new Date(user.birthday)); // Ensure date object
               const isToday = userBirthday.getMonth() === todayNormalized.getMonth() && userBirthday.getDate() === todayNormalized.getDate();
-
+              
+              // Determine if it's a past birthday for display purposes within the relevant window
               let bdayThisYear = new Date(todayNormalized.getFullYear(), userBirthday.getMonth(), userBirthday.getDate());
               bdayThisYear = normalizeDateToStartOfDay(bdayThisYear);
               const isPast = bdayThisYear.getTime() < todayNormalized.getTime() && !isToday;
@@ -457,7 +494,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
                   <div className="flex-grow">
                     <p className="font-semibold">{user.name}</p>
                     <p className="text-sm text-gray-600">
-                      Aniversari: {getLocalDateString(userBirthday).replace(`, ${userBirthday.getFullYear()}`, '')} ({calculateAge(user.birthday)} anys)
+                      Aniversari: {formatDate(user.birthday).replace(`, ${userBirthday.getFullYear()}`, '')} ({calculateAge(user.birthday)} anys)
                       {isToday && <span className="ml-2 text-red-600">🎉 AVUI!</span>}
                       {isPast && <span className="ml-2 text-gray-500">(Passat)</span>}
                     </p>
@@ -468,14 +505,14 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
             }) : <p className="text-gray-500">No hi ha aniversaris pròxims o recents aquesta setmana.</p>}
           </ul>
         ) : (
-          <p className="text-gray-500">Carregant usuaris...</p>
+          <p className="text-gray-500">Carregant usuaris...</p> // Changed text for loading state
         )}
       </div>
 
       {/* Holiday Summary */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Resum de Vacances</h2>
-        {dataLoaded ? (
+        {gyms.length > 0 ? ( // Changed from gymVacationSummary to gyms
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {gymVacationSummary.length > 0 ? gymVacationSummary.map(summary => (
               <div key={summary.name} className="p-4 rounded-lg bg-blue-50 border-l-4 border-blue-400">
@@ -485,7 +522,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
             )) : <p className="text-gray-500">No hi ha informació de vacances disponible.</p>}
           </div>
         ) : (
-          <p className="text-gray-500">Carregant gimnasos...</p>
+          <p className="text-gray-500">Carregant gimnasos...</p> // Changed text for loading state
         )}
       </div>
 
@@ -498,18 +535,20 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
           ))}
         </div>
         <div className="grid grid-cols-7 gap-2">
-          {dataLoaded ? (
+          {fixedSchedules.length > 0 && recurringSessions.length > 0 && gyms.length > 0 ? (
             calendarDays.map((date, index) => {
               if (!date) return <div key={index} className="p-2"></div>;
 
               const dateNormalized = normalizeDateToStartOfDay(date);
-              const dateStr = getLocalDateString(dateNormalized);
+              const dateStr = getLocalDateString(dateNormalized); // Use getLocalDateString
+              
+              const sessionsToDisplay = getSessionsForDate(date); // Use the helper function here
 
-              const sessionsToDisplay = getSessionsForDate(date);
 
               const isHoliday = gyms.some(gym => gym.holidaysTaken.includes(dateStr));
-              const isGymClosure = false;
+              const isGymClosure = false; // Not implemented yet
               const isMissed = missedDays.some(md => normalizeDateToStartOfDay(new Date(md.date)).getTime() === dateNormalized.getTime());
+
 
               return (
                 <div
@@ -524,7 +563,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
                   <span className="font-bold">{date.getDate()}</span>
                   {sessionsToDisplay.length > 0 && (
                     <div className="flex flex-wrap justify-center mt-1">
-                      {sessionsToDisplay.slice(0, 2).map((session, sIdx) => {
+                      {sessionsToDisplay.slice(0, 2).map((session, sIdx) => { // Show up to 2 sessions
                         const program = programs.find(p => p.id === session.programId);
                         return program ? (
                           <span key={sIdx} className="text-[9px] font-semibold mx-0.5 px-1 rounded" style={{ backgroundColor: program.color + '30', color: program.color }}>
