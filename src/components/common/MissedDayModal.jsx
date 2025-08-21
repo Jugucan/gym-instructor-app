@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getLocalDateString } from '../../utils/dateHelpers.jsx';
+import { formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx';
 
 export const MissedDayModal = ({
   show,
@@ -36,7 +36,7 @@ export const MissedDayModal = ({
       console.warn('Please select a gym before saving.');
       return;
     }
-    onSave({ date: getLocalDateString(date), gymId, notes });
+    onSave({ date: formatDateDDMMYYYY(date), gymId, notes });
   };
 
   return (
@@ -46,7 +46,7 @@ export const MissedDayModal = ({
           {isAlreadyMissed ? 'Editar Dia No Assistit' : 'Marcar Dia No Assistit'}
         </h2>
         <p className="text-gray-600 mb-4">
-          Data: <span className="font-semibold">{date ? getLocalDateString(date) : ''}</span>
+          Data: <span className="font-semibold">{date ? formatDateDDMMYYYY(date) : ''}</span>
         </p>
 
         <div className="mb-4">
