@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, onSnapshot, updateDoc, deleteDoc, addDoc, getDocs, doc, where } from 'firebase/firestore';
-import { getLocalDateString, normalizeDateToStartOfDay } from '../../utils/dateHelpers.jsx';
+import { getLocalDateString, normalizeDateToStartOfDay, formatDate } from '../../utils/dateHelpers.jsx';
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
 import { MessageModal } from '../common/MessageModal.jsx'; // Import MessageModal
 import { SessionModal } from '../common/SessionModal.jsx'; // Ensure SessionModal is imported
