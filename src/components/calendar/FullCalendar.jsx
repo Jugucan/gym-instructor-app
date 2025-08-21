@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, setDoc } from 'firebase/firestore'; // Added setDoc
-import { formatDate, normalizeDateToStartOfDay, getLocalDateString } from '../../utils/dateHelpers.jsx';
+import { formatDate, normalizeDateToStartOfDay, getLocalDateString, formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx';
 import { getActiveFixedSchedule } from '../../utils/scheduleHelpers.jsx';
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
 import { SessionModal } from '../common/SessionModal.jsx';
@@ -32,6 +32,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
   // Helper to get sessions for a specific date (combining fixed, recurring, and overrides)
   const getSessionsForDate = (date) => {
     const dateNormalized = normalizeDateToStartOfDay(date);
+    const dateStr = formatDate(dateNormalized); // Use YYYY-MM-DD for consistent comparison
     const dayOfWeek = dateNormalized.getDay();
     const dayName = daysOfWeekNames[dayOfWeek];
 
@@ -42,11 +43,12 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       const recStartDateNormalized = normalizeDateToStartOfDay(new Date(rec.startDate));
       const recEndDateNormalized = rec.endDate ? normalizeDateToStartOfDay(new Date(rec.endDate)) : null;
       return rec.daysOfWeek.includes(dayName) &&
-             dateNormalized.getTime() >= recStartDateNormalized.getTime() &&
-             (!recEndDateNormalized || dateNormalized.getTime() <= recEndDateNormalized.getTime());
+            dateNormalized.getTime() >= recStartDateNormalized.getTime() &&
+            (!recEndDateNormalized || dateNormalized.getTime() <= recEndDateNormalized.getTime());
     });
 
-    const override = scheduleOverrides.find(so => normalizeDateToStartOfDay(new Date(so.date)).getTime() === dateNormalized.getTime());
+    // Find override using the standardized YYYY-MM-DD format
+    const override = scheduleOverrides.find(so => so.date === dateStr);
 
     if (override) {
       // Ensure sessions have a temporary unique ID for React list keying if they don't from Firestore
@@ -87,7 +89,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       return;
     }
 
-    const dateToSave = getLocalDateString(selectedDate);
+    const dateToSave = formatDate(selectedDate); // Use the correct YYYY-MM-DD format for storage
     const scheduleOverridesCollectionPath = getUserCollectionPath(appId, currentUserId, 'scheduleOverrides');
     if (!scheduleOverridesCollectionPath) return;
 
@@ -140,13 +142,13 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 
   const handleOpenMissedDayModal = (date) => {
     setMissedDayDate(date);
-    const dateNormalized = normalizeDateToStartOfDay(date);
-    const existingMissedEntry = missedDays.find(md => normalizeDateToStartOfDay(new Date(md.date)).getTime() === dateNormalized.getTime());
+    const dateStr = formatDate(date); // Use the YYYY-MM-DD format for comparison
+    const existingMissedEntry = missedDays.find(md => md.date === dateStr);
     
     if (existingMissedEntry) {
       setIsMissedDayForModal(true);
       setMissedDayDocIdForModal(existingMissedEntry.id);
-      setExistingMissedGymId(existingMissedEntry.gymId);
+      setExistingMissedGymId(existingMissedEntry.assignedGymId);
       setExistingMissedNotes(existingMissedEntry.notes);
     } else {
       setIsMissedDayForModal(false);
@@ -172,13 +174,15 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       const missedDaysCollectionPath = getUserCollectionPath(appId, currentUserId, 'missedDays');
       if (!missedDaysCollectionPath) return;
 
-      const newMissedDay = { date, gymId, notes };
+      const dateToSave = formatDate(date); // Convert to YYYY-MM-DD for storage
+
+      const newMissedDay = { date: dateToSave, assignedGymId: gymId, notes };
 
       // Check if this date and gymId combo already exists to prevent duplicates
       const existingMissedDayQuery = query(
         collection(db, missedDaysCollectionPath),
-        where('date', '==', date),
-        where('gymId', '==', gymId)
+        where('date', '==', dateToSave),
+        where('assignedGymId', '==', gymId)
       );
       const querySnapshot = await getDocs(existingMissedDayQuery);
 
@@ -197,7 +201,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       setShowMissedDayModal(false);
       setMessageModalContent({
         title: 'Dia No Assistit Registrat',
-        message: `El dia ${formatDate(date)} s'ha marcat com a no assistit correctament.`,
+        message: `El dia ${formatDateDDMMYYYY(dateToSave)} s'ha marcat com a no assistit correctament.`,
         isConfirm: false,
         onConfirm: () => setShowMessageModal(false),
       });
@@ -320,13 +324,13 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
             if (!date) return <div key={index} className="p-2"></div>;
 
             const dateNormalized = normalizeDateToStartOfDay(date);
-            const dateStr = getLocalDateString(dateNormalized);
+            const dateStr = formatDate(dateNormalized); // Use YYYY-MM-DD for comparison
 
             const sessionsToDisplay = getSessionsForDate(date);
 
             const isHoliday = gyms.some(gym => gym.holidaysTaken.includes(dateStr));
             const isGymClosure = false; // Not implemented yet
-            const currentMissedDayEntry = missedDays.find(md => normalizeDateToStartOfDay(new Date(md.date)).getTime() === dateNormalized.getTime());
+            const currentMissedDayEntry = missedDays.find(md => md.date === dateStr);
             const isMissed = !!currentMissedDayEntry;
 
 
@@ -334,7 +338,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
               <div
                 key={dateStr}
                 className={`p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[80px] cursor-pointer
-                  ${dateStr === getLocalDateString(todayNormalized) ? 'bg-blue-200 border border-blue-500' : 'bg-gray-100'}
+                  ${dateStr === formatDate(todayNormalized) ? 'bg-blue-200 border border-blue-500' : 'bg-gray-100'}
                   ${isHoliday ? 'bg-red-200 border border-red-500' : ''}
                   ${isGymClosure ? 'bg-purple-200 border border-purple-500' : ''}
                   ${isMissed ? 'bg-orange-100 border border-orange-400' : ''}
