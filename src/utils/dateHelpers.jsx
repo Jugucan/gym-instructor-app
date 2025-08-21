@@ -7,9 +7,9 @@
  * @returns {string} The formatted date string, or an empty string if the date is invalid.
  */
 export const getLocalDateString = (date) => {
-  if (!(date instanceof Date) || isNaN(date.getTime())) { // Use getTime() to check for valid date object
+  if (!(date instanceof Date) || isNaN(date.getTime())) {
     console.error("Invalid date provided to getLocalDateString:", date);
-    return ""; // Or some default value like 'N/A'
+    return "";
   }
   return date.toLocaleDateString('es-ES', {
     day: '2-digit',
@@ -19,9 +19,32 @@ export const getLocalDateString = (date) => {
 };
 
 /**
+ * Formats a YYYY-MM-DD date string or a Date object to DD-MM-YYYY string.
+ * This is the desired format for user-facing display.
+ * @param {string|Date} dateValue - The date string (YYYY-MM-DD) or Date object to format.
+ * @returns {string} The formatted date string (DD-MM-YYYY), or an empty string if the date is invalid.
+ */
+export const formatDateDDMMYYYY = (dateValue) => {
+  let dateString = dateValue;
+
+  if (dateValue instanceof Date) {
+    const year = dateValue.getFullYear();
+    const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+    const day = String(dateValue.getDate()).padStart(2, '0');
+    dateString = `${year}-${month}-${day}`;
+  }
+
+  if (!dateString || typeof dateString !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return 'N/A';
+  }
+
+  const [year, month, day] = dateString.split('-');
+  return `${day}-${month}-${year}`;
+};
+
+/**
  * Formats a Date object or date string into a YYYY-MM-DD string.
  * This format is often useful for input fields or a more standard date representation.
- * Handles invalid dates gracefully and accepts both Date objects and strings.
  * @param {Date|string} date - The date object or string to format.
  * @returns {string} The formatted date string (YYYY-MM-DD), or an empty string if the date is invalid.
  */
