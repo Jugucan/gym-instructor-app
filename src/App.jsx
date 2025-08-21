@@ -42,19 +42,16 @@ function App() {
   const [recurringSessions, setRecurringSessions] = useState([]);
   const [scheduleOverrides, setScheduleOverrides] = useState([]);
   const [missedDays, setMissedDays] = useState([]);
+  const [gymClosures, setGymClosures] = useState([]);
   
-  // ----------------------------------------------------
-  // NOU: Aquesta variable d'estat controla si les dades ja s'han carregat.
   const [dataLoaded, setDataLoaded] = useState(false);
-  // ----------------------------------------------------
 
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
-  const [showAuthModal, setShowAuthModal] = useState(false); // State to control auth modal visibility
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
 
-  // Initialize Firebase and set up authentication and data listeners
   useEffect(() => {
     const initializeFirebase = async () => {
       try {
@@ -82,7 +79,6 @@ function App() {
           }
         }
         
-        // If firebaseConfig is empty or invalid, proceed with dummy data
         if (Object.keys(firebaseConfig).length === 0 || !firebaseConfig.projectId) {
           console.warn("Firebase config not found or invalid. Using dummy data for local development.");
           setPrograms(initialPrograms);
@@ -91,15 +87,10 @@ function App() {
           setFixedSchedules(initialFixedSchedules);
           setRecurringSessions(initialRecurringSessions);
           setMissedDays(initialMissedDays);
+          setGymClosures([]); // Ensure gymClosures is set to an empty array for dummy data
           setIsFirebaseReady(true);
           setLoadingMessage('Dades locals carregades (sense connexió a Firebase).');
-          // No user ID needed for dummy data, so currentUserId remains null
-          
-          // ----------------------------------------------------
-          // NOU: Activem dataLoaded per a les dades dummy
           setDataLoaded(true);
-          // ----------------------------------------------------
-          
           return;
         }
 
@@ -114,22 +105,16 @@ function App() {
 
         onAuthStateChanged(firebaseAuth, async (user) => {
           if (user) {
-            // User is signed in (anonymously or with email)
             setCurrentUserId(user.uid);
-            setShowAuthModal(false); // Hide auth modal if already signed in
+            setShowAuthModal(false);
             setLoadingMessage('Carregant dades del núvol...');
             
-            // Path for user-specific collections, using the appId from env vars
             const getUserCollectionPathForListeners = (collectionName) => {
               return `artifacts/${envAppId}/users/${user.uid}/${collectionName}`;
             };
             
-            // ----------------------------------------------------
-            // NOU: Aquí guardarem les funcions de neteja dels listeners
             const listeners = [];
-            // ----------------------------------------------------
 
-            // Setup real-time listeners for all collections
             listeners.push(onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('programs')), (snapshot) => {
               setPrograms(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             }, (error) => console.error("Error fetching programs:", error)));
@@ -158,52 +143,44 @@ function App() {
               setMissedDays(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             }, (error) => console.error("Error fetching missed days:", error)));
 
+            listeners.push(onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('gymClosures')), (snapshot) => {
+              setGymClosures(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }, (error) => console.error("Error fetching gym closures:", error)));
+
             setIsFirebaseReady(true);
             setLoadingMessage('Dades carregades amb èxit!');
-            
-            // ----------------------------------------------------
-            // NOU: Quan tots els listeners estiguin actius, activem dataLoaded
             setDataLoaded(true);
-            // ----------------------------------------------------
-
-            // Initial data seeding if collections are empty (first run)
+            
             const checkAndSeedData = async () => {
-              // Check *all* relevant collections before seeding to avoid over-seeding
-              const collectionsToCheck = ['programs', 'users', 'gyms', 'fixedSchedules', 'recurringSessions', 'missedDays'];
+              const collectionsToCheck = ['programs', 'users', 'gyms', 'fixedSchedules', 'recurringSessions', 'missedDays', 'gymClosures'];
               let allCollectionsEmpty = true;
               for (const collectionName of collectionsToCheck) {
                 const collectionRef = collection(firestoreDb, getUserCollectionPathForListeners(collectionName));
                 const snap = await getDocs(collectionRef);
                 if (!snap.empty) {
                   allCollectionsEmpty = false;
-                  break; // If any collection has data, don't seed all
+                  break;
                 }
               }
 
-              if (allCollectionsEmpty) { // Only seed if *all* relevant collections are empty
+              if (allCollectionsEmpty) {
                 setLoadingMessage('Inicialitzant dades per primera vegada...');
                 try {
-                  // Seed initialPrograms
                   for (const p of initialPrograms) {
                     await setDoc(doc(firestoreDb, getUserCollectionPathForListeners('programs'), p.id), p);
                   }
-                  // Seed initialUsers
                   for (const u of initialUsers) {
                     await setDoc(doc(firestoreDb, getUserCollectionPathForListeners('users'), u.id), u);
                   }
-                  // Seed initialGyms
                   for (const g of initialGyms) {
                     await setDoc(doc(firestoreDb, getUserCollectionPathForListeners('gyms'), g.id), g);
                   }
-                  // Seed initialFixedSchedules
                   for (const fs of initialFixedSchedules) {
                     await setDoc(doc(firestoreDb, getUserCollectionPathForListeners('fixedSchedules'), fs.id), fs);
                   }
-                  // Seed initialRecurringSessions
                   for (const rs of initialRecurringSessions) {
                     await setDoc(doc(firestoreDb, getUserCollectionPathForListeners('recurringSessions'), rs.id), rs);
                   }
-                  // Seed initialMissedDays
                   for (const md of initialMissedDays) {
                     await setDoc(doc(firestoreDb, getUserCollectionPathForListeners('missedDays'), md.id), md);
                   }
@@ -222,30 +199,26 @@ function App() {
             };
             checkAndSeedData();
             
-            // ----------------------------------------------------
-            // NOU: Retorna una funció de neteja per als listeners
             return () => listeners.forEach(unsubscribe => unsubscribe());
-            // ----------------------------------------------------
 
           } else {
-            // No user signed in, attempt anonymous or show auth modal
             if (initialAuthToken) {
               await signInWithCustomToken(firebaseAuth, initialAuthToken);
             } else {
-              // If no custom token and no user, show auth modal for persistent login
-              setCurrentUserId(null); // Clear user ID on logout
-              setPrograms([]); // Clear data
+              setCurrentUserId(null);
+              setPrograms([]);
               setUsers([]);
               setGyms([]);
               setFixedSchedules([]);
               setRecurringSessions([]);
               setScheduleOverrides([]);
               setMissedDays([]);
+              setGymClosures([]);
               setShowAuthModal(true);
               setLoadingMessage('Inicia sessió o registra\'t per carregar les teves dades.');
             }
           }
-          setIsFirebaseReady(true); // Firebase auth state checked, ready to proceed
+          setIsFirebaseReady(true);
         });
 
       } catch (error) {
@@ -256,7 +229,7 @@ function App() {
     };
 
     initializeFirebase();
-  }, []); // Run once on component mount
+  }, []);
 
   const handleLogin = async (email, password) => {
     if (!authInstance) return;
@@ -324,14 +297,15 @@ function App() {
     if (!authInstance) return;
     try {
       await signOut(authInstance);
-      setCurrentUserId(null); // Clear user ID on logout
-      setPrograms([]); // Clear data
+      setCurrentUserId(null);
+      setPrograms([]);
       setUsers([]);
       setGyms([]);
       setFixedSchedules([]);
       setRecurringSessions([]);
       setScheduleOverrides([]);
       setMissedDays([]);
+      setGymClosures([]);
       setLoadingMessage('Sessió tancada. Inicia sessió de nou.');
       setShowMessageModal(true);
       setMessageModalContent({
@@ -354,12 +328,10 @@ function App() {
 
 
   const renderPage = () => {
-    // Only show auth modal if Firebase is ready and no user is authenticated
     if (isFirebaseReady && !currentUserId && showAuthModal) {
       return <Auth onLogin={handleLogin} onRegister={handleRegister} />;
     }
     
-    // Show loading screen until Firebase is ready AND data is loaded
     if (!isFirebaseReady || !dataLoaded) {
       return (
         <div className="flex justify-center items-center min-h-[calc(100vh-100px)]">
@@ -368,13 +340,9 @@ function App() {
       );
     }
     
-    // Once Firebase is ready and user is authenticated and data is loaded, render the actual content
     switch (currentPage) {
       case 'dashboard':
-        // ----------------------------------------------------
-        // IMPORTANT: Aquí passem la nova propietat `dataLoaded` al Dashboard
-        return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} db={dbInstance} currentUserId={currentUserId} appId={appId} dataLoaded={dataLoaded} />;
-        // ----------------------------------------------------
+        return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} gymClosures={gymClosures} db={dbInstance} currentUserId={currentUserId} appId={appId} dataLoaded={dataLoaded} />;
       case 'programs':
         return <Programs programs={programs} setCurrentPage={setCurrentPage} setSelectedProgramId={setSelectedProgramId} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
       case 'programDetail':
@@ -385,7 +353,7 @@ function App() {
       case 'users':
         return <Users users={users} gyms={gyms} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
       case 'gymsAndHolidays':
-        return <GymsAndHolidays gyms={gyms} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
+        return <GymsAndHolidays gyms={gyms} gymClosures={gymClosures} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
       case 'mixes':
         return <Mixes programs={programs} />;
       case 'settings':
@@ -397,10 +365,7 @@ function App() {
       case 'monthlyReport':
         return <MonthlyReport programs={programs} gyms={gyms} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} scheduleOverrides={scheduleOverrides} missedDays={missedDays} />;
       default:
-        // ----------------------------------------------------
-        // IMPORTANT: Aquí també passem la propietat `dataLoaded`
-        return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} db={dbInstance} currentUserId={currentUserId} appId={appId} dataLoaded={dataLoaded} />;
-        // ----------------------------------------------------
+        return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} gymClosures={gymClosures} db={dbInstance} currentUserId={currentUserId} appId={appId} dataLoaded={dataLoaded} />;
     }
   };
 
