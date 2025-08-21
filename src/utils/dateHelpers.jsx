@@ -19,28 +19,41 @@ export const getLocalDateString = (date) => {
 };
 
 /**
- * Formats a YYYY-MM-DD date string or a Date object to DD-MM-YYYY string.
+ * Formats a YYYY-MM-DD date string or a Date object to a DD-MM-YYYY string.
  * This is the desired format for user-facing display.
  * @param {string|Date} dateValue - The date string (YYYY-MM-DD) or Date object to format.
- * @returns {string} The formatted date string (DD-MM-YYYY), or an empty string if the date is invalid.
+ * @returns {string} The formatted date string (DD-MM-YYYY), or 'N/A' if the date is invalid.
  */
 export const formatDateDDMMYYYY = (dateValue) => {
-  let dateString = dateValue;
+  let dateObj;
 
   if (dateValue instanceof Date) {
-    const year = dateValue.getFullYear();
-    const month = String(dateValue.getMonth() + 1).padStart(2, '0');
-    const day = String(dateValue.getDate()).padStart(2, '0');
-    dateString = `${year}-${month}-${day}`;
-  }
-
-  if (!dateString || typeof dateString !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    dateObj = dateValue;
+  } else if (typeof dateValue === 'string') {
+    // Handle both YYYY-MM-DD and DD/MM/YYYY
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+      dateObj = new Date(`${dateValue}T00:00:00`); // Use T00:00:00 to avoid timezone issues
+    } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) {
+      const [day, month, year] = dateValue.split('/');
+      dateObj = new Date(`${year}-${month}-${day}T00:00:00`);
+    } else {
+      dateObj = new Date(dateValue);
+    }
+  } else {
     return 'N/A';
   }
 
-  const [year, month, day] = dateString.split('-');
+  if (isNaN(dateObj.getTime())) {
+    return 'N/A';
+  }
+
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const year = dateObj.getFullYear();
+  
   return `${day}-${month}-${year}`;
 };
+
 
 /**
  * Formats a Date object or date string into a YYYY-MM-DD string.
@@ -59,12 +72,18 @@ export const formatDate = (date) => {
   else if (typeof date === 'string') {
     // If it's already in YYYY-MM-DD format, return as is (after validation)
     if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      const testDate = new Date(date);
+      const testDate = new Date(`${date}T00:00:00`);
       if (!isNaN(testDate.getTime())) {
         return date; // Already in correct format and valid
       }
     }
-    dateObj = new Date(date);
+    // If it's in DD/MM/YYYY format, parse it correctly
+    else if (/^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
+      const [day, month, year] = date.split('/');
+      dateObj = new Date(`${year}-${month}-${day}T00:00:00`);
+    } else {
+      dateObj = new Date(date);
+    }
   } 
   // If it's neither, return empty
   else {
