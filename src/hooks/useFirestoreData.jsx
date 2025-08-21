@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, where, doc, getDoc, setDoc, addDoc } from 'firebase/firestore';
 import { getUserCollectionPath, getAppCollectionPath } from '../utils/firebasePaths.jsx';
-import { db } from '../firebase.jsx'; // Importar db des del fitxer centralitzat
 
-const useFirestoreData = (currentUserId, appId, isFirebaseReady, setLoadingMessage, setShowMessageModal, setMessageModalContent) => {
+const useFirestoreData = (db, currentUserId, appId, isFirebaseReady, setLoadingMessage, setShowMessageModal, setMessageModalContent) => {
   const [programs, setPrograms] = useState([]);
   const [users, setUsers] = useState([]);
   const [gyms, setGyms] = useState([]);
@@ -146,7 +145,6 @@ const useFirestoreData = (currentUserId, appId, isFirebaseReady, setLoadingMessa
   // Helper function to populate empty collections with initial data
   const populateInitialData = async (collectionPath, initialArray) => {
     try {
-      console.log(`Populating initial data for: ${collectionPath}`);
       for (const item of initialArray) {
         const docRef = item.id ? doc(db, collectionPath, item.id) : null;
         if (docRef) {
@@ -155,7 +153,6 @@ const useFirestoreData = (currentUserId, appId, isFirebaseReady, setLoadingMessa
           await addDoc(collection(db, collectionPath), item);
         }
       }
-      console.log(`Initial data populated for: ${collectionPath}`);
     } catch (error) {
       console.error("Error populating initial data:", error);
       setMessageModalContent({
@@ -169,13 +166,11 @@ const useFirestoreData = (currentUserId, appId, isFirebaseReady, setLoadingMessa
   };
 
   useEffect(() => {
-    if (!currentUserId || !isFirebaseReady) {
-      console.log('useFirestoreData: Not ready', { currentUserId, isFirebaseReady });
+    if (!db || !currentUserId || !isFirebaseReady) {
       setDataLoaded(false);
       return;
     }
 
-    console.log('useFirestoreData: Starting data loading...');
     setLoadingMessage('Carregant dades...');
     setDataLoaded(false);
 
@@ -185,11 +180,9 @@ const useFirestoreData = (currentUserId, appId, isFirebaseReady, setLoadingMessa
 
     const markCollectionLoaded = () => {
       collectionsLoaded++;
-      console.log(`Collections loaded: ${collectionsLoaded}/${totalCollections}`);
       if (collectionsLoaded === totalCollections) {
         setDataLoaded(true);
         setLoadingMessage('');
-        console.log('All data loaded successfully!');
       }
     };
 
@@ -197,25 +190,19 @@ const useFirestoreData = (currentUserId, appId, isFirebaseReady, setLoadingMessa
     const setupCollectionListener = (collectionName, setData, initialArray = []) => {
       const path = getUserCollectionPath(appId, currentUserId, collectionName);
       if (!path) {
-        console.error(`No path generated for collection: ${collectionName}`);
         markCollectionLoaded();
         return;
       }
 
-      console.log(`Setting up listener for: ${collectionName} at path: ${path}`);
-      
       const q = query(collection(db, path));
       const unsubscribe = onSnapshot(q, async (snapshot) => { // Added async here
         if (snapshot.empty && initialArray.length > 0) {
-          console.log(`Collection ${collectionName} is empty, populating with initial data...`);
           setLoadingMessage(`Inicialitzant ${collectionName}...`);
           await populateInitialData(path, initialArray); // Await population
           // Data will be picked up by the next onSnapshot call, or rely on the state update
           // No need for markCollectionLoaded here as the outer effect waits for data to appear
         } else {
           const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          console.log(`Data loaded for ${collectionName}:`, data.length, 'items');
-          
           // Special handling for fixedSchedules to ensure sorting
           if (collectionName === 'fixedSchedules') {
               setData(data.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()));
@@ -250,10 +237,9 @@ const useFirestoreData = (currentUserId, appId, isFirebaseReady, setLoadingMessa
 
     // Cleanup function
     return () => {
-      console.log('Cleaning up Firestore listeners...');
       unsubscribeFunctions.forEach(unsubscribe => unsubscribe());
     };
-  }, [currentUserId, appId, isFirebaseReady]); // Added missing dependencies to useEffect
+  }, [db, currentUserId, appId, isFirebaseReady]); // Added missing dependencies to useEffect
 
   return { 
     programs, 
