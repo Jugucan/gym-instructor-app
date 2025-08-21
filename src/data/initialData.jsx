@@ -1,103 +1,324 @@
-// Define some initial data for demonstration purposes
-export const initialPrograms = [
-    { id: 'bp120', name: 'BodyPump 120', shortName: 'BP', color: '#EF4444', releaseDate: '2024-09-01', tracks: [
-      { id: 'bp120_t1', name: 'Warm-up', type: 'Warm-up', isFavorite: false, notes: '' },
-      { id: 'bp120_t2', name: 'Squats', type: 'Squats', isFavorite: true, notes: 'Molta energia!' },
-      { id: 'bp120_t3', name: 'Chest', type: 'Chest', isFavorite: false, notes: '' },
-      { id: 'bp120_t4', name: 'Back', type: 'Back', isFavorite: false, notes: '' },
-      { id: 'bp120_t5', name: 'Triceps', type: 'Triceps', isFavorite: false, notes: '' },
-      { id: 'bp120_t6', name: 'Biceps', type: 'Biceps', isFavorite: false, notes: '' },
-      { id: 'bp120_t7', name: 'Lunges', type: 'Lunges', isFavorite: false, notes: '' },
-      { id: 'bp120_t8', name: 'Shoulders', type: 'Shoulders', isFavorite: false, notes: '' },
-      { id: 'bp120_t9', name: 'Core', type: 'Core', isFavorite: true, notes: 'Bon track de core.' },
-      { id: 'bp120_t10', name: 'Cool-down', type: 'Cool-down', isFavorite: false, notes: '' },
-    ], sessions: [
-      { date: '2025-07-01', notes: 'Primera sessió' },
-      { date: '2025-07-03', notes: '' },
-      { date: '2025-07-07', notes: '' },
-      { date: '2025-07-09', notes: 'Grup amb molta energia' },
-      { date: '2025-07-14', notes: '' },
-      { date: '2025-07-16', notes: '' },
-      { date: '2025-07-21', notes: 'Última sessió' },
-    ] },
-    { id: 'bc95', name: 'BodyCombat 95', shortName: 'BC', color: '#FCD34D', releaseDate: '2024-10-01', tracks: [
-      { id: 'bc95_t1', name: 'Warm-up', type: 'Warm-up', isFavorite: false, notes: '' },
-      { id: 'bc95_t2', name: 'Combat 1', type: 'Combat', isFavorite: true, notes: 'Ritme ràpid.' },
-      { id: 'bc95_t3', name: 'Power 1', type: 'Power', isFavorite: false, notes: '' },
-      { id: 'bc95_t4', name: 'Combat 2', type: 'Combat', isFavorite: false, notes: '' },
-      { id: 'bc95_t5', name: 'Power 2', type: 'Power', isFavorite: false, notes: '' },
-      { id: 'bc95_t6', name: 'Combat 3', type: 'Combat', isFavorite: false, notes: '' },
-      { id: 'bc95_t7', name: 'Muay Thai', type: 'Muay Thai', isFavorite: false, notes: '' },
-      { id: 'bc95_t8', type: 'Power 3', isFavorite: false, notes: '' },
-      { id: 'bc95_t9', type: 'Core', isFavorite: false, notes: '' },
-      { id: 'bc95_t10', name: 'Cool-down', type: 'Cool-down', isFavorite: false, notes: '' },
-    ], sessions: [] },
-    { id: 'sb60', name: 'Sh\'Bam 60', shortName: 'SB', color: '#EC4899', releaseDate: '2024-09-15', tracks: [
-      { id: 'sb60_t1', name: 'Warm-up', type: 'Warm-up', isFavorite: false, notes: '' },
-      { id: 'sb60_t2', name: 'Track 2', type: 'Dance', isFavorite: true, notes: 'Molt divertida!' },
-      { id: 'sb60_t3', name: 'Track 3', type: 'Dance', isFavorite: false, notes: '' },
-      { id: 'sb60_t4', type: 'Dance', isFavorite: false, notes: '' },
-      { id: 'sb60_t5', type: 'Dance', isFavorite: false, notes: '' },
-      { id: 'sb60_t6', type: 'Dance', isFavorite: false, notes: '' },
-      { id: 'sb60_t7', type: 'Dance', isFavorite: false, notes: '' },
-      { id: 'sb60_t8', type: 'Dance', isFavorite: false, notes: '' },
-      { id: 'sb60_t9', type: 'Core', isFavorite: false, notes: '' },
-      { id: 'sb60_t10', name: 'Cool-down', type: 'Cool-down', isFavorite: false, notes: '' },
-    ], sessions: [
-      { date: '2025-06-10', notes: '' },
-      { date: '2025-06-17', notes: '' },
-      { date: '2025-07-02', notes: '' },
-    ] },
-  ];
-  
-  export const initialUsers = [
-    { id: 'user1', name: 'Maria Garcia', birthday: '1990-08-07', usualSessions: ['BP', 'SB'], notes: 'Li agrada la música llatina.', gymId: 'gym_arbucies', phone: '600112233', email: 'maria.g@example.com', photoUrl: 'https://placehold.co/50x50/aabbcc/ffffff?text=MG' },
-    { id: 'user2', name: 'Joan Pons', birthday: '1985-08-08', usualSessions: ['BC', 'BP'], notes: '', gymId: 'gym_arbucies', phone: '600445566', email: 'joan.p@example.com', photoUrl: 'https://placehold.co/50x50/ccddeeff/ffffff?text=JP' },
-    { id: 'user3', name: 'Anna Soler', birthday: '1992-08-10', usualSessions: ['SB'], notes: '', gymId: 'gym_santhilari', phone: '600778899', email: 'anna.s@example.com', photoUrl: 'https://placehold.co/50x50/eeffcc/ffffff?text=AS' },
-    { id: 'user4', name: 'Test Aniversari', birthday: '2000-08-06', usualSessions: ['BP'], notes: 'Usuari de prova per aniversaris.', gymId: 'gym_santhilari', phone: '600000000', email: 'test.a@example.com', photoUrl: 'https://placehold.co/50x50/ffccaa/ffffff?text=TA' },
-  ];
-  
-  export const initialGyms = [
-    { id: 'gym_arbucies', name: 'Gimnàs Arbúcies', workDays: ['Dilluns', 'Dimarts', 'Dijous'], totalVacationDays: 13, holidaysTaken: [] },
-    { id: 'gym_santhilari', name: 'Gimnàs Sant Hilari', workDays: ['Dimecres', 'Divendres'], totalVacationDays: 9, holidaysTaken: [] },
-  ];
-  
-  export const initialFixedSchedules = [
-    {
-      id: 'fixed_1',
-      startDate: '2024-01-01',
-      schedule: {
-        'Dilluns': [
-          { id: 'ses_d1_1', programId: 'sb60', time: '17:00', gymId: 'gym_arbucies' },
-          { id: 'ses_d1_2', programId: 'bp120', time: '18:00', gymId: 'gym_arbucies' },
-          { id: 'ses_d1_3', programId: 'bp120', time: '19:00', gymId: 'gym_arbucies' },
-        ],
-        'Dimarts': [
-          { id: 'ses_d2_1', programId: 'bc95', time: '18:00', gymId: 'gym_arbucies' },
-        ],
-        'Dimecres': [
-          { id: 'ses_d3_1', programId: 'bp120', time: '19:00', gymId: 'gym_santhilari' },
-        ],
-        'Dijous': [
-          { id: 'ses_d4_1', programId: 'sb60', time: '17:00', gymId: 'gym_arbucies' },
-          { id: 'ses_d4_2', programId: 'bp120', time: '18:00', gymId: 'gym_arbucies' },
-        ],
-        'Divendres': [
-          { id: 'ses_d5_1', programId: 'sb60', time: '10:00', gymId: 'gym_santhilari' },
-          { id: 'ses_d5_2', programId: 'bc95', time: '11:00', gymId: 'gym_santhilari' },
-          { id: 'ses_d5_3', programId: 'bp120', time: '12:00', gymId: 'gym_santhilari' },
-        ],
-        'Dissabte': [],
-        'Diumenge': [],
+import React, { useState } from 'react';
+import { collection, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { getUserCollectionPath } from '../../utils/firebasePaths.jsx'; // Confirmat: .jsx
+import { formatDate } from '../../utils/dateHelpers.jsx'; // Confirmat: .jsx
+import { MessageModal } from '../common/MessageModal.jsx'; // Confirmat: .jsx
+
+const Users = ({ users, gyms, db, currentUserId, appId }) => {
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [userName, setUserName] = useState('');
+  const [userBirthday, setUserBirthday] = useState('');
+  const [userSessions, setUserSessions] = useState(''); // Comma-separated string for usual sessions
+  const [userNotes, setUserNotes] = useState('');
+  const [userGymId, setUserGymId] = useState('');
+  const [userPhone, setUserPhone] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const [userPhotoUrl, setUserPhotoUrl] = useState('');
+
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
+
+  const handleSaveUser = async () => {
+    if (!db || !currentUserId || !appId) {
+      setMessageModalContent({
+        title: 'Error de Connexió',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
+    if (!userName || !userBirthday || !userGymId) {
+      setMessageModalContent({
+        title: 'Camps Obligatoris',
+        message: 'El nom, la data d\'aniversari i el gimnàs són obligatoris.',
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
+    const newUser = {
+      name: userName,
+      birthday: userBirthday,
+      usualSessions: userSessions.split(',').map(s => s.trim()).filter(Boolean),
+      notes: userNotes,
+      gymId: userGymId,
+      phone: userPhone,
+      email: userEmail,
+      photoUrl: userPhotoUrl,
+    };
+
+    const usersPath = getUserCollectionPath(appId, currentUserId, 'users');
+    if (!usersPath) return;
+
+    try {
+      if (editingUser) {
+        const userRef = doc(db, usersPath, editingUser.id);
+        await updateDoc(userRef, newUser);
+        setMessageModalContent({
+          title: 'Usuari Actualitzat',
+          message: 'L\'usuari s\'ha actualitzat correctament.',
+          isConfirm: false,
+          onConfirm: () => setShowMessageModal(false),
+        });
+      } else {
+        await addDoc(collection(db, usersPath), newUser);
+        setMessageModalContent({
+          title: 'Usuari Afegit',
+          message: 'El nou usuari s\'ha afegit correctament.',
+          isConfirm: false,
+          onConfirm: () => setShowMessageModal(false),
+        });
       }
-    },
-  ];
-  
-  export const initialRecurringSessions = [
-    { id: 'rec_1', programId: 'bp120', time: '17:00', gymId: 'gym_santhilari', daysOfWeek: ['Divendres'], startDate: '2025-09-19', endDate: '2025-12-31', notes: 'Sessió de prova recurrent' }
-  ];
-  
-  export const initialMissedDays = [
-    { id: 'md1', date: '2025-08-05', gymId: 'gym_arbucies', notes: 'Malalt' },
-    { id: 'md2', date: '2025-07-28', gymId: 'gym_santhilari', notes: 'Viatge' },
-  ];
+      setShowMessageModal(true);
+      setShowUserModal(false);
+      setUserName('');
+      setUserBirthday('');
+      setUserSessions('');
+      setUserNotes('');
+      setUserGymId('');
+      setUserPhone('');
+      setUserEmail('');
+      setUserPhotoUrl('');
+      setEditingUser(null);
+    } catch (error) {
+      console.error("Error saving user:", error);
+      setMessageModalContent({
+        title: 'Error',
+        message: `Hi ha hagut un error al guardar l'usuari: ${error.message}`,
+        isConfirm: false,
+        onConfirm: () => setShowMessageModal(false),
+      });
+      setShowMessageModal(true);
+    }
+  };
+
+  const handleDeleteUser = (userId) => {
+    if (!db || !currentUserId || !appId) {
+        setMessageModalContent({
+          title: 'Error de Connexió',
+          message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+          isConfirm: false,
+          onConfirm: () => setShowMessageModal(false),
+        });
+        setShowMessageModal(true);
+        return;
+      }
+
+    setMessageModalContent({
+      title: 'Confirmar Eliminació',
+      message: 'Estàs segur que vols eliminar aquest usuari? Aquesta acció és irreversible.',
+      isConfirm: true,
+      onConfirm: async () => {
+        const usersPath = getUserCollectionPath(appId, currentUserId, 'users');
+        if (!usersPath) return;
+        try {
+          await deleteDoc(doc(db, usersPath, userId));
+          setShowMessageModal(true);
+          setMessageModalContent({
+            title: 'Eliminat',
+            message: 'Usuari eliminat correctament.',
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+        } catch (error) {
+          console.error("Error deleting user:", error);
+          setShowMessageModal(true);
+          setMessageModalContent({
+            title: 'Error',
+            message: `Hi ha hagut un error al eliminar l'usuari: ${error.message}`,
+            isConfirm: false,
+            onConfirm: () => setShowMessageModal(false),
+          });
+        }
+      },
+      onCancel: () => setShowMessageModal(false),
+    });
+    setShowMessageModal(true);
+  };
+
+  const handleEditUser = (user) => {
+    setEditingUser(user);
+    setUserName(user.name);
+    setUserBirthday(user.birthday);
+    setUserSessions(user.usualSessions ? user.usualSessions.join(', ') : '');
+    setUserNotes(user.notes || '');
+    setUserGymId(user.gymId || '');
+    setUserPhone(user.phone || '');
+    setUserEmail(user.email || '');
+    setUserPhotoUrl(user.photoUrl || '');
+    setShowUserModal(true);
+  };
+
+  return (
+    <div className="p-6 bg-gray-50 min-h-screen font-inter">
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">Gestió d'Usuaris</h1>
+
+      <button
+        onClick={() => { setShowUserModal(true); setEditingUser(null); setUserName(''); setUserBirthday(''); setUserSessions(''); setUserNotes(''); setUserGymId(''); setUserPhone(''); setUserEmail(''); setUserPhotoUrl(''); }}
+        className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out mb-6"
+      >
+        Afegir Nou Usuari
+      </button>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {users.map(user => (
+          <div key={user.id} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 flex items-center space-x-4">
+            <img
+              src={user.photoUrl || `https://placehold.co/50x50/aabbcc/ffffff?text=${user.name.charAt(0)}`}
+              alt={user.name}
+              className="w-12 h-12 rounded-full object-cover"
+              onError={(e) => { e.target.onerror = null; e.target.src = `https://placehold.co/50x50/aabbcc/ffffff?text=${user.name.charAt(0)}`; }}
+            />
+            <div className="flex-grow">
+              <h2 className="text-xl font-semibold text-gray-800">{user.name}</h2>
+              <p className="text-sm text-gray-600">Aniversari: {formatDate(user.birthday)}</p>
+              <p className="text-sm text-gray-600">Gimnàs: {gyms.find(g => g.id === user.gymId)?.name || 'N/A'}</p>
+              {user.usualSessions && user.usualSessions.length > 0 && (
+                <p className="text-sm text-gray-600">Sessions habituals: {user.usualSessions.join(', ')}</p>
+              )}
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => handleEditUser(user)}
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
+              >
+                Editar
+              </button>
+              <button
+                onClick={() => handleDeleteUser(user.id)}
+                className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {showUserModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto"> {/* Adjusted max-h */}
+            <h2 className="text-xl font-bold text-gray-800 mb-4">{editingUser ? 'Editar Usuari' : 'Afegir Nou Usuari'}</h2>
+            <div className="mb-4">
+              <label htmlFor="userName" className="block text-gray-700 text-sm font-bold mb-2">Nom de l'Usuari:</label>
+              <input
+                type="text"
+                id="userName"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={userName}
+                onChange={(e) => setUserName(e.target.value)}
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="userBirthday" className="block text-gray-700 text-sm font-bold mb-2">Data d'Aniversari:</label>
+              <input
+                type="date"
+                id="userBirthday"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={userBirthday}
+                onChange={(e) => setUserBirthday(e.target.value)}
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="userGym" className="block text-gray-700 text-sm font-bold mb-2">Gimnàs Principal:</label>
+              <select
+                id="userGym"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={userGymId}
+                onChange={(e) => setUserGymId(e.target.value)}
+              >
+                <option value="">Selecciona un gimnàs</option>
+                {gyms.map(gym => (
+                  <option key={gym.id} value={gym.id}>{gym.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="mb-4">
+              <label htmlFor="userSessions" className="block text-gray-700 text-sm font-bold mb-2">Sessions Habituals (separades per comes):</label>
+              <input
+                type="text"
+                id="userSessions"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={userSessions}
+                onChange={(e) => setUserSessions(e.target.value)}
+                placeholder="Ex: BP, BC, SB"
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="userPhone" className="block text-gray-700 text-sm font-bold mb-2">Telèfon (Opcional):</label>
+              <input
+                type="tel"
+                id="userPhone"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={userPhone}
+                onChange={(e) => setUserPhone(e.target.value)}
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="userEmail" className="block text-gray-700 text-sm font-bold mb-2">Email (Opcional):</label>
+              <input
+                type="email"
+                id="userEmail"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={userEmail}
+                onChange={(e) => setUserEmail(e.target.value)}
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="userPhotoUrl" className="block text-gray-700 text-sm font-bold mb-2">URL Foto de Perfil (Opcional):</label>
+              <input
+                type="text"
+                id="userPhotoUrl"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={userPhotoUrl}
+                onChange={(e) => setUserPhotoUrl(e.target.value)}
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="userNotes" className="block text-gray-700 text-sm font-bold mb-2">Notes (Opcional):</label>
+              <textarea
+                id="userNotes"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={userNotes}
+                onChange={(e) => setUserNotes(e.target.value)}
+                rows="3"
+              ></textarea>
+            </div>
+            <div className="flex justify-end space-x-4 mt-6">
+              <button
+                onClick={() => setShowUserModal(false)}
+                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+              >
+                Cancel·lar
+              </button>
+              <button
+                onClick={handleSaveUser}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+              >
+                {editingUser ? 'Guardar Canvis' : 'Afegir Usuari'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showMessageModal && (
+        <MessageModal
+          show={showMessageModal}
+          title={messageModalContent.title}
+          message={messageModalContent.message}
+          onConfirm={messageModalContent.onConfirm}
+          onCancel={messageModalContent.onCancel}
+          isConfirm={messageModalContent.isConfirm}
+        />
+      )}
+    </div>
+  );
+};
+
+export default Users;
