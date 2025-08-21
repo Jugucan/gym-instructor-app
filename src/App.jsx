@@ -42,6 +42,11 @@ function App() {
   const [recurringSessions, setRecurringSessions] = useState([]);
   const [scheduleOverrides, setScheduleOverrides] = useState([]);
   const [missedDays, setMissedDays] = useState([]);
+  
+  // ----------------------------------------------------
+  // NOU: Aquesta variable d'estat controla si les dades ja s'han carregat.
+  const [dataLoaded, setDataLoaded] = useState(false);
+  // ----------------------------------------------------
 
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
@@ -89,6 +94,12 @@ function App() {
           setIsFirebaseReady(true);
           setLoadingMessage('Dades locals carregades (sense connexió a Firebase).');
           // No user ID needed for dummy data, so currentUserId remains null
+          
+          // ----------------------------------------------------
+          // NOU: Activem dataLoaded per a les dades dummy
+          setDataLoaded(true);
+          // ----------------------------------------------------
+          
           return;
         }
 
@@ -98,7 +109,7 @@ function App() {
 
         setDbInstance(firestoreDb);
         setAuthInstance(firebaseAuth);
-
+        
         const initialAuthToken = env.VITE_INITIAL_AUTH_TOKEN || null;
 
         onAuthStateChanged(firebaseAuth, async (user) => {
@@ -112,38 +123,48 @@ function App() {
             const getUserCollectionPathForListeners = (collectionName) => {
               return `artifacts/${envAppId}/users/${user.uid}/${collectionName}`;
             };
+            
+            // ----------------------------------------------------
+            // NOU: Aquí guardarem les funcions de neteja dels listeners
+            const listeners = [];
+            // ----------------------------------------------------
 
             // Setup real-time listeners for all collections
-            onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('programs')), (snapshot) => {
+            listeners.push(onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('programs')), (snapshot) => {
               setPrograms(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            }, (error) => console.error("Error fetching programs:", error));
+            }, (error) => console.error("Error fetching programs:", error)));
 
-            onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('users')), (snapshot) => {
+            listeners.push(onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('users')), (snapshot) => {
               setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            }, (error) => console.error("Error fetching users:", error));
+            }, (error) => console.error("Error fetching users:", error)));
 
-            onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('gyms')), (snapshot) => {
+            listeners.push(onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('gyms')), (snapshot) => {
               setGyms(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            }, (error) => console.error("Error fetching gyms:", error));
+            }, (error) => console.error("Error fetching gyms:", error)));
 
-            onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('fixedSchedules')), (snapshot) => {
+            listeners.push(onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('fixedSchedules')), (snapshot) => {
               setFixedSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()));
-            }, (error) => console.error("Error fetching fixed schedules:", error));
+            }, (error) => console.error("Error fetching fixed schedules:", error)));
 
-            onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('recurringSessions')), (snapshot) => {
+            listeners.push(onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('recurringSessions')), (snapshot) => {
               setRecurringSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            }, (error) => console.error("Error fetching recurring sessions:", error));
+            }, (error) => console.error("Error fetching recurring sessions:", error)));
 
-            onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('scheduleOverrides')), (snapshot) => {
+            listeners.push(onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('scheduleOverrides')), (snapshot) => {
               setScheduleOverrides(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            }, (error) => console.error("Error fetching schedule overrides:", error));
+            }, (error) => console.error("Error fetching schedule overrides:", error)));
 
-            onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('missedDays')), (snapshot) => {
+            listeners.push(onSnapshot(collection(firestoreDb, getUserCollectionPathForListeners('missedDays')), (snapshot) => {
               setMissedDays(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            }, (error) => console.error("Error fetching missed days:", error));
+            }, (error) => console.error("Error fetching missed days:", error)));
 
             setIsFirebaseReady(true);
             setLoadingMessage('Dades carregades amb èxit!');
+            
+            // ----------------------------------------------------
+            // NOU: Quan tots els listeners estiguin actius, activem dataLoaded
+            setDataLoaded(true);
+            // ----------------------------------------------------
 
             // Initial data seeding if collections are empty (first run)
             const checkAndSeedData = async () => {
@@ -200,6 +221,11 @@ function App() {
               }
             };
             checkAndSeedData();
+            
+            // ----------------------------------------------------
+            // NOU: Retorna una funció de neteja per als listeners
+            return () => listeners.forEach(unsubscribe => unsubscribe());
+            // ----------------------------------------------------
 
           } else {
             // No user signed in, attempt anonymous or show auth modal
@@ -328,11 +354,13 @@ function App() {
 
 
   const renderPage = () => {
-    // Only show loading or auth modal if Firebase is not ready OR (Firebase is ready but no user is authenticated AND auth modal is active)
-    if (!isFirebaseReady || (isFirebaseReady && !currentUserId && showAuthModal)) {
-      if (!isFirebaseReady || (isFirebaseReady && !currentUserId && showAuthModal)) {
-        return <Auth onLogin={handleLogin} onRegister={handleRegister} />;
-      }
+    // Only show auth modal if Firebase is ready and no user is authenticated
+    if (isFirebaseReady && !currentUserId && showAuthModal) {
+      return <Auth onLogin={handleLogin} onRegister={handleRegister} />;
+    }
+    
+    // Show loading screen until Firebase is ready AND data is loaded
+    if (!isFirebaseReady || !dataLoaded) {
       return (
         <div className="flex justify-center items-center min-h-[calc(100vh-100px)]">
           <p className="text-xl text-gray-700">{loadingMessage}</p>
@@ -340,21 +368,13 @@ function App() {
       );
     }
     
-    // Once Firebase is ready and user is authenticated (currentUserId is set), render the actual content
-    // We also wait for initial data to be loaded before showing the main content
-    if (currentUserId && (programs.length === 0 && users.length === 0 && gyms.length === 0 && fixedSchedules.length === 0 && recurringSessions.length === 0 && scheduleOverrides.length === 0 && missedDays.length === 0)) {
-      // If user is authenticated but data states are empty, assume data is still loading
-      return (
-        <div className="flex justify-center items-center min-h-[calc(100vh-100px)]">
-          <p className="text-xl text-gray-700">{loadingMessage}</p>
-        </div>
-      );
-    }
-
-
+    // Once Firebase is ready and user is authenticated and data is loaded, render the actual content
     switch (currentPage) {
       case 'dashboard':
-        return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} db={dbInstance} currentUserId={currentUserId} appId={appId} setMissedDays={setMissedDays} />;
+        // ----------------------------------------------------
+        // IMPORTANT: Aquí passem la nova propietat `dataLoaded` al Dashboard
+        return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} db={dbInstance} currentUserId={currentUserId} appId={appId} dataLoaded={dataLoaded} />;
+        // ----------------------------------------------------
       case 'programs':
         return <Programs programs={programs} setCurrentPage={setCurrentPage} setSelectedProgramId={setSelectedProgramId} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
       case 'programDetail':
@@ -377,7 +397,10 @@ function App() {
       case 'monthlyReport':
         return <MonthlyReport programs={programs} gyms={gyms} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} scheduleOverrides={scheduleOverrides} missedDays={missedDays} />;
       default:
-        return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} db={dbInstance} currentUserId={currentUserId} appId={appId} setMissedDays={setMissedDays} />;
+        // ----------------------------------------------------
+        // IMPORTANT: Aquí també passem la propietat `dataLoaded`
+        return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} db={dbInstance} currentUserId={currentUserId} appId={appId} dataLoaded={dataLoaded} />;
+        // ----------------------------------------------------
     }
   };
 
