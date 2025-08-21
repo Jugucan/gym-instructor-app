@@ -19,20 +19,45 @@ export const getLocalDateString = (date) => {
 };
 
 /**
- * Formats a Date object into a YYYY-MM-DD string.
+ * Formats a Date object or date string into a YYYY-MM-DD string.
  * This format is often useful for input fields or a more standard date representation.
- * Handles invalid Date objects gracefully.
- * @param {Date} date - The date object to format.
+ * Handles invalid dates gracefully and accepts both Date objects and strings.
+ * @param {Date|string} date - The date object or string to format.
  * @returns {string} The formatted date string (YYYY-MM-DD), or an empty string if the date is invalid.
  */
 export const formatDate = (date) => {
-  if (!(date instanceof Date) || isNaN(date.getTime())) { // Use getTime() to check for valid date object
+  let dateObj;
+  
+  // If it's already a Date object
+  if (date instanceof Date) {
+    dateObj = date;
+  } 
+  // If it's a string, try to parse it
+  else if (typeof date === 'string') {
+    // If it's already in YYYY-MM-DD format, return as is (after validation)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const testDate = new Date(date);
+      if (!isNaN(testDate.getTime())) {
+        return date; // Already in correct format and valid
+      }
+    }
+    dateObj = new Date(date);
+  } 
+  // If it's neither, return empty
+  else {
+    console.error("Invalid date type provided to formatDate:", typeof date, date);
+    return "";
+  }
+  
+  // Check if the resulting date is valid
+  if (isNaN(dateObj.getTime())) {
     console.error("Invalid date provided to formatDate:", date);
     return "";
   }
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
-  const day = String(date.getDate()).padStart(2, '0');
+  
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+  const day = String(dateObj.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 
