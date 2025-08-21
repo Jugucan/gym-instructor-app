@@ -2,7 +2,7 @@
 
 import React from 'react';
 import FullCalendar from '../calendar/FullCalendar.jsx'; // Import the new FullCalendar component
-import { formatDate } from '../../utils/dateHelpers.jsx';
+import { formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx';
 
 const Schedule = ({ programs, scheduleOverrides, fixedSchedules, users, gyms, recurringSessions, missedDays, db, currentUserId, appId }) => {
   return (
@@ -30,7 +30,7 @@ const Schedule = ({ programs, scheduleOverrides, fixedSchedules, users, gyms, re
         {fixedSchedules.length > 0 ? (
           <ul className="list-disc list-inside space-y-2 text-gray-700">
             {fixedSchedules.map(fs => (
-              <li key={fs.id}>**Actiu des del {formatDate(fs.startDate)}**: {Object.keys(fs.schedule).filter(day => fs.schedule[day] && fs.schedule[day].length > 0).join(', ')}</li>
+              <li key={fs.id}>**Actiu des del {formatDateDDMMYYYY(fs.startDate)}**: {Object.keys(fs.schedule).filter(day => fs.schedule[day] && fs.schedule[day].length > 0).join(', ')}</li>
             ))}
           </ul>
         ) : (
@@ -46,7 +46,7 @@ const Schedule = ({ programs, scheduleOverrides, fixedSchedules, users, gyms, re
               const program = programs.find(p => p.id === rs.programId);
               const gym = gyms.find(g => g.id === rs.gymId);
               return (
-                <li key={rs.id}>**{program?.shortName || 'N/A'}** a les {rs.time} ({gym?.name || 'N/A'}) els {rs.daysOfWeek.join(', ')} (des del {formatDate(rs.startDate)}{rs.endDate && ` fins al ${formatDate(rs.endDate)}`})</li>
+                <li key={rs.id}>**{program?.shortName || 'N/A'}** a les {rs.time} ({gym?.name || 'N/A'}) els {rs.daysOfWeek.join(', ')} (des del {formatDateDDMMYYYY(rs.startDate)}{rs.endDate && ` fins al ${formatDateDDMMYYYY(rs.endDate)}`})</li>
               );
             })}
           </ul>
@@ -60,7 +60,7 @@ const Schedule = ({ programs, scheduleOverrides, fixedSchedules, users, gyms, re
         {scheduleOverrides.length > 0 ? (
           <ul className="list-disc list-inside space-y-2 text-gray-700">
             {scheduleOverrides.map(so => (
-              <li key={so.id}>**{formatDate(so.date)}**: {so.sessions.map(s => `${programs.find(p => p.id === s.programId)?.shortName || 'N/A'} (${s.time} a ${gyms.find(g => g.id === s.gymId)?.name || 'N/A'})`).join(', ')}</li>
+              <li key={so.id}>**{formatDateDDMMYYYY(so.date)}**: {so.sessions.map(s => `${programs.find(p => p.id === s.programId)?.shortName || 'N/A'} (${s.time} a ${gyms.find(g => g.id === s.gymId)?.name || 'N/A'})`).join(', ')}</li>
             ))}
           </ul>
         ) : (
@@ -75,7 +75,7 @@ const Schedule = ({ programs, scheduleOverrides, fixedSchedules, users, gyms, re
             {missedDays.map(md => {
               const gym = gyms.find(g => g.id === md.gymId);
               return (
-                <li key={md.id}>**{formatDate(md.date)}**: Gimnàs: {gym?.name || 'Tots els gimnasos'} {md.notes && `(${md.notes})`}</li>
+                <li key={md.id}>**{formatDateDDMMYYYY(md.date)}**: Gimnàs: {gym?.name || 'Tots els gimnasos'} {md.notes && `(${md.notes})`}</li>
               );
             })}
           </ul>
