@@ -1,5 +1,3 @@
-// src/components/calendar/FullCalendar.jsx
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, setDoc } from 'firebase/firestore';
 import { formatDate, normalizeDateToStartOfDay, getLocalDateString, formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx';
@@ -42,8 +40,8 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       const recStartDateNormalized = normalizeDateToStartOfDay(new Date(rec.startDate));
       const recEndDateNormalized = rec.endDate ? normalizeDateToStartOfDay(new Date(rec.endDate)) : null;
       return rec.daysOfWeek.includes(dayName) &&
-            dateNormalized.getTime() >= recStartDateNormalized.getTime() &&
-            (!recEndDateNormalized || dateNormalized.getTime() <= recEndDateNormalized.getTime());
+             dateNormalized.getTime() >= recStartDateNormalized.getTime() &&
+             (!recEndDateNormalized || dateNormalized.getTime() <= recEndDateNormalized.getTime());
     });
 
     const override = scheduleOverrides.find(so => so.date === dateStr);
@@ -268,6 +266,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 
   const calendarDays = useMemo(() => {
     const days = [];
+    // Ajustar l'inici del calendari per a que la setmana comenci en dilluns
     const startOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
     for (let i = 0; i < startOffset; i++) {
       days.push(null);
@@ -310,14 +309,17 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
               <span>Avui</span>
             </div>
             <div className="flex items-center gap-2">
+              {/*  */}
               <div className="w-4 h-4 bg-red-600 rounded"></div>
               <span className="text-white bg-red-600 px-1 rounded">Festius/Tancaments</span>
             </div>
             <div className="flex items-center gap-2">
+              {/*  */}
               <div className="w-4 h-4 bg-orange-500 rounded"></div>
               <span className="text-white bg-orange-500 px-1 rounded">Vacances Gimnàs</span>
             </div>
             <div className="flex items-center gap-2">
+              {/*  */}
               <div className="w-4 h-4 bg-yellow-400 border border-yellow-600 rounded"></div>
               <span>No Assistit</span>
             </div>
@@ -335,13 +337,14 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 
             const dateNormalized = normalizeDateToStartOfDay(date);
             const dateStr = formatDate(dateNormalized);
+            const dateStrDDMMYYYY = formatDateDDMMYYYY(dateNormalized); // <--- NOU: Format DD-MM-YYYY
 
             const sessionsToDisplay = getSessionsForDate(date);
 
             // Detectar tipus de dia
             const isToday = dateStr === formatDate(todayNormalized);
-            // CANVI IMPORTANT: Ara gymClosures està ben definit i és una array
-            const isGymClosure = gymClosures && Array.isArray(gymClosures) && gymClosures.some(gc => gc.date === dateStr);
+            // CANVI IMPORTANT: Utilitzem el format DD-MM-YYYY per comprovar els festius
+            const isGymClosure = gymClosures && Array.isArray(gymClosures) && gymClosures.some(gc => gc.date === dateStrDDMMYYYY);
             const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStr));
             const currentMissedDayEntry = missedDays.find(md => md.date === dateStr);
             const isMissed = !!currentMissedDayEntry;
