@@ -9,7 +9,8 @@ import { SessionModal } from '../common/SessionModal.jsx';
 import { MissedDayModal } from '../common/MissedDayModal.jsx';
 import { MessageModal } from '../common/MessageModal.jsx';
 
-const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, gymClosures, db, currentUserId, appId }) => {
+// CANVI IMPORTANT: Afegit gymClosures com a propietat obligatòria
+const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, gymClosures = [], db, currentUserId, appId }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -339,7 +340,8 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 
             // Detectar tipus de dia
             const isToday = dateStr === formatDate(todayNormalized);
-            const isGymClosure = gymClosures && gymClosures.some(gc => gc.date === dateStr);
+            // CANVI IMPORTANT: Ara gymClosures està ben definit i és una array
+            const isGymClosure = gymClosures && Array.isArray(gymClosures) && gymClosures.some(gc => gc.date === dateStr);
             const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStr));
             const currentMissedDayEntry = missedDays.find(md => md.date === dateStr);
             const isMissed = !!currentMissedDayEntry;
