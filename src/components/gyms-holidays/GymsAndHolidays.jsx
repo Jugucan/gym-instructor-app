@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { collection, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
 import { formatDate } from '../../utils/dateHelpers.jsx';
 import { MessageModal } from '../common/MessageModal.jsx';
@@ -200,7 +200,7 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId }) => {
 
     try {
       const gymRef = doc(db, gymsPath, selectedGymForHoliday);
-      const gymSnap = await db.getDoc(gymRef);
+      const gymSnap = await getDoc(gymRef);
       const currentHolidays = gymSnap.exists() ? gymSnap.data().holidaysTaken || [] : [];
       
       if (currentHolidays.includes(holidayDate)) {
@@ -432,7 +432,7 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId }) => {
         if (!gymsPath) return;
         try {
           const gymRef = doc(db, gymsPath, gymId);
-          const gymSnap = await db.getDoc(gymRef);
+          const gymSnap = await getDoc(gymRef);
           if (gymSnap.exists()) {
             const currentHolidays = gymSnap.data().holidaysTaken || [];
             const updatedHolidays = currentHolidays.filter(h => h !== dateToDelete);
@@ -740,3 +740,4 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId }) => {
 };
 
 export default GymsAndHolidays;
+
