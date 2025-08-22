@@ -19,9 +19,9 @@ export const getLocalDateString = (date) => {
 };
 
 /**
- * Formats a YYYY-MM-DD date string or a Date object to a DD-MM-YYYY string.
+ * Formats a YYYY-MM-DD date string, DD-MM-YYYY, or a Date object to a DD-MM-YYYY string.
  * This is the desired format for user-facing display.
- * @param {string|Date} dateValue - The date string (YYYY-MM-DD) or Date object to format.
+ * @param {string|Date} dateValue - The date string or Date object to format.
  * @returns {string} The formatted date string (DD-MM-YYYY), or 'N/A' if the date is invalid.
  */
 export const formatDateDDMMYYYY = (dateValue) => {
@@ -30,10 +30,21 @@ export const formatDateDDMMYYYY = (dateValue) => {
   if (dateValue instanceof Date) {
     dateObj = dateValue;
   } else if (typeof dateValue === 'string') {
-    // Handle both YYYY-MM-DD and DD/MM/YYYY
+    // Handle YYYY-MM-DD format
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-      dateObj = new Date(`${dateValue}T00:00:00`); // Use T00:00:00 to avoid timezone issues
-    } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) {
+      dateObj = new Date(`${dateValue}T00:00:00`);
+    }
+    // Handle DD-MM-YYYY format (already in desired format, but validate and return)
+    else if (/^\d{2}-\d{2}-\d{4}$/.test(dateValue)) {
+      const [day, month, year] = dateValue.split('-');
+      dateObj = new Date(`${year}-${month}-${day}T00:00:00`);
+      // If valid, return original format
+      if (!isNaN(dateObj.getTime())) {
+        return dateValue;
+      }
+    }
+    // Handle DD/MM/YYYY format
+    else if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) {
       const [day, month, year] = dateValue.split('/');
       dateObj = new Date(`${year}-${month}-${day}T00:00:00`);
     } else {
@@ -54,10 +65,9 @@ export const formatDateDDMMYYYY = (dateValue) => {
   return `${day}-${month}-${year}`;
 };
 
-
 /**
- * Formats a Date object or date string into a YYYY-MM-DD string.
- * This format is often useful for input fields or a more standard date representation.
+ * Formats a Date object, YYYY-MM-DD string, or DD-MM-YYYY string into a YYYY-MM-DD string.
+ * This format is used for storage and consistent comparison.
  * @param {Date|string} date - The date object or string to format.
  * @returns {string} The formatted date string (YYYY-MM-DD), or an empty string if the date is invalid.
  */
@@ -77,7 +87,12 @@ export const formatDate = (date) => {
         return date; // Already in correct format and valid
       }
     }
-    // If it's in DD/MM/YYYY format, parse it correctly
+    // If it's in DD-MM-YYYY format, convert it
+    else if (/^\d{2}-\d{2}-\d{4}$/.test(date)) {
+      const [day, month, year] = date.split('-');
+      dateObj = new Date(`${year}-${month}-${day}T00:00:00`);
+    }
+    // If it's in DD/MM/YYYY format, convert it
     else if (/^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
       const [day, month, year] = date.split('/');
       dateObj = new Date(`${year}-${month}-${day}T00:00:00`);
@@ -104,16 +119,29 @@ export const formatDate = (date) => {
 };
 
 /**
- * Parses a YYYY-MM-DD string into a Date object.
- * @param {string} dateString - The date string in YYYY-MM-DD format.
+ * Parses a date string (YYYY-MM-DD or DD-MM-YYYY) into a Date object.
+ * @param {string} dateString - The date string to parse.
  * @returns {Date | null} The Date object, or null if the string is invalid.
  */
 export const parseDateString = (dateString) => {
   if (!dateString) return null;
-  const [year, month, day] = dateString.split('-').map(Number);
+  
+  let year, month, day;
+  
+  // Handle YYYY-MM-DD format
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    [year, month, day] = dateString.split('-').map(Number);
+  }
+  // Handle DD-MM-YYYY format
+  else if (/^\d{2}-\d{2}-\d{4}$/.test(dateString)) {
+    [day, month, year] = dateString.split('-').map(Number);
+  } else {
+    return null;
+  }
+  
   // Month is 0-indexed in Date constructor
   const date = new Date(year, month - 1, day);
-  // Check if the parsed date is valid and corresponds to the input string to prevent invalid dates like Feb 30
+  // Check if the parsed date is valid and corresponds to the input string
   if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) {
     return date;
   }
