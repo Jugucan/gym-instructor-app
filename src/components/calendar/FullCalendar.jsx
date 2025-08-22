@@ -1,20 +1,19 @@
 // src/components/calendar/FullCalendar.jsx
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, setDoc } from 'firebase/firestore'; // Added setDoc
+import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, setDoc } from 'firebase/firestore';
 import { formatDate, normalizeDateToStartOfDay, getLocalDateString, formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx';
 import { getActiveFixedSchedule } from '../../utils/scheduleHelpers.jsx';
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
 import { SessionModal } from '../common/SessionModal.jsx';
 import { MissedDayModal } from '../common/MissedDayModal.jsx';
-import { MessageModal } from '../common/MessageModal.jsx'; // Ensure MessageModal is imported
+import { MessageModal } from '../common/MessageModal.jsx';
 
-
-const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, db, currentUserId, appId }) => {
+const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, gymClosures, db, currentUserId, appId }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [sessionsForDay, setSessionsForDay] = useState([]); // Sessions for the selected date
+  const [sessionsForDay, setSessionsForDay] = useState([]);
 
   const [showMissedDayModal, setShowMissedDayModal] = useState(false);
   const [missedDayDate, setMissedDayDate] = useState(null);
@@ -23,16 +22,15 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
   const [existingMissedGymId, setExistingMissedGymId] = useState('');
   const [existingMissedNotes, setExistingMissedNotes] = useState('');
 
-
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
   const daysOfWeekNames = ['Diumenge', 'Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte'];
 
-  // Helper to get sessions for a specific date (combining fixed, recurring, and overrides)
+  // Helper to get sessions for a specific date
   const getSessionsForDate = (date) => {
     const dateNormalized = normalizeDateToStartOfDay(date);
-    const dateStr = formatDate(dateNormalized); // Use YYYY-MM-DD for consistent comparison
+    const dateStr = formatDate(dateNormalized);
     const dayOfWeek = dateNormalized.getDay();
     const dayName = daysOfWeekNames[dayOfWeek];
 
@@ -47,11 +45,9 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
             (!recEndDateNormalized || dateNormalized.getTime() <= recEndDateNormalized.getTime());
     });
 
-    // Find override using the standardized YYYY-MM-DD format
     const override = scheduleOverrides.find(so => so.date === dateStr);
 
     if (override) {
-      // Ensure sessions have a temporary unique ID for React list keying if they don't from Firestore
       return override.sessions.map(s => ({ ...s, id: s.id || `override_${Date.now()}_${Math.random()}`, isOverride: true }));
     } else {
       const combinedSessions = [...fixedDaySessions, ...recurringSessionsForDay];
@@ -60,15 +56,13 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       combinedSessions.forEach(session => {
         const key = `${session.programId}-${session.time}-${session.gymId}`;
         if (!seen.has(key)) {
-          // Ensure session has an ID for keying in React if it doesn't from Firestore
           uniqueSessions.push({ ...session, id: session.id || `fixed_rec_${Date.now()}_${Math.random()}` });
           seen.add(key);
         }
       });
-      return uniqueSessions.map(s => ({ ...s, isFixedOrRecurring: true })); // Mark type
+      return uniqueSessions.map(s => ({ ...s, isFixedOrRecurring: true }));
     }
   };
-
 
   const handleDayClick = (date) => {
     setSelectedDate(date);
@@ -89,15 +83,14 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       return;
     }
 
-    const dateToSave = formatDate(selectedDate); // Use the correct YYYY-MM-DD format for storage
+    const dateToSave = formatDate(selectedDate);
     const scheduleOverridesCollectionPath = getUserCollectionPath(appId, currentUserId, 'scheduleOverrides');
     if (!scheduleOverridesCollectionPath) return;
 
     try {
-      const overrideDocRef = doc(db, scheduleOverridesCollectionPath, dateToSave); // Use date as document ID
+      const overrideDocRef = doc(db, scheduleOverridesCollectionPath, dateToSave);
 
       if (sessionsToSave.length > 0) {
-        // Validate sessions before saving
         for (const session of sessionsToSave) {
           if (!session.programId || !session.time || !session.gymId) {
             setMessageModalContent({
@@ -110,13 +103,11 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
             return;
           }
         }
-        // Use setDoc to create or overwrite the document with date as ID
         await setDoc(overrideDocRef, {
           date: dateToSave,
-          sessions: sessionsToSave.map(({ id, isNew, isOverride, isFixedOrRecurring, ...rest }) => rest), // Remove temp IDs and flags
+          sessions: sessionsToSave.map(({ id, isNew, isOverride, isFixedOrRecurring, ...rest }) => rest),
         });
       } else {
-        // If sessionsToSave is empty, delete the override document for this date
         await deleteDoc(overrideDocRef);
       }
 
@@ -142,7 +133,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 
   const handleOpenMissedDayModal = (date) => {
     setMissedDayDate(date);
-    const dateStr = formatDate(date); // Use the YYYY-MM-DD format for comparison
+    const dateStr = formatDate(date);
     const existingMissedEntry = missedDays.find(md => md.date === dateStr);
     
     if (existingMissedEntry) {
@@ -174,11 +165,9 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       const missedDaysCollectionPath = getUserCollectionPath(appId, currentUserId, 'missedDays');
       if (!missedDaysCollectionPath) return;
 
-      const dateToSave = formatDate(date); // Convert to YYYY-MM-DD for storage
-
+      const dateToSave = formatDate(date);
       const newMissedDay = { date: dateToSave, assignedGymId: gymId, notes };
 
-      // Check if this date and gymId combo already exists to prevent duplicates
       const existingMissedDayQuery = query(
         collection(db, missedDaysCollectionPath),
         where('date', '==', dateToSave),
@@ -239,8 +228,8 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
           if (!missedDaysCollectionPath) return;
 
           await deleteDoc(doc(db, missedDaysCollectionPath, docId));
-          setShowMessageModal(false); // Close confirm modal
-          setShowMissedDayModal(false); // Close the original modal
+          setShowMessageModal(false);
+          setShowMissedDayModal(false);
           setMessageModalContent({
             title: 'Dia Desmarcat',
             message: 'El dia s\'ha desmarcat com a no assistit correctament.',
@@ -264,7 +253,6 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
     setShowMessageModal(true);
   };
 
-
   const goToPreviousMonth = () => {
     setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
   };
@@ -275,11 +263,10 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 
   const currentYear = currentMonth.getFullYear();
   const daysInMonth = new Date(currentYear, currentMonth.getMonth() + 1, 0).getDate();
-  const firstDayOfMonth = new Date(currentYear, currentMonth.getMonth(), 1).getDay(); // 0 for Sunday, 1 for Monday
+  const firstDayOfMonth = new Date(currentYear, currentMonth.getMonth(), 1).getDay();
 
   const calendarDays = useMemo(() => {
     const days = [];
-    // Adjust for Monday start (0=Sunday, 1=Monday -> so if Sunday, need 6 blanks, if Monday 0, if Tue 1, etc.)
     const startOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
     for (let i = 0; i < startOffset; i++) {
       days.push(null);
@@ -289,7 +276,6 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
     }
     return days;
   }, [currentMonth, daysInMonth, firstDayOfMonth, currentYear]);
-
 
   const todayNormalized = normalizeDateToStartOfDay(new Date());
 
@@ -314,6 +300,29 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
           </button>
         </div>
 
+        {/* Llegenda de colors */}
+        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Llegenda:</h3>
+          <div className="flex flex-wrap gap-4 text-xs">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-blue-200 border border-blue-500 rounded"></div>
+              <span>Avui</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-red-600 rounded"></div>
+              <span className="text-white bg-red-600 px-1 rounded">Festius/Tancaments</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-orange-500 rounded"></div>
+              <span className="text-white bg-orange-500 px-1 rounded">Vacances Gimnàs</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-yellow-400 border border-yellow-600 rounded"></div>
+              <span>No Assistit</span>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-7 gap-2 text-center text-sm font-medium text-gray-600 mb-2">
           {['Dl', 'Dm', 'Dc', 'Dj', 'Dv', 'Ds', 'Dg'].map(day => (
             <div key={day}>{day}</div>
@@ -324,63 +333,101 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
             if (!date) return <div key={index} className="p-2"></div>;
 
             const dateNormalized = normalizeDateToStartOfDay(date);
-            const dateStr = formatDate(dateNormalized); // Use YYYY-MM-DD for comparison
+            const dateStr = formatDate(dateNormalized);
 
             const sessionsToDisplay = getSessionsForDate(date);
 
-            const isHoliday = gyms.some(gym => gym.holidaysTaken.includes(dateStr));
-            const isGymClosure = false; // Not implemented yet
+            // Detectar tipus de dia
+            const isToday = dateStr === formatDate(todayNormalized);
+            const isGymClosure = gymClosures && gymClosures.some(gc => gc.date === dateStr);
+            const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStr));
             const currentMissedDayEntry = missedDays.find(md => md.date === dateStr);
             const isMissed = !!currentMissedDayEntry;
 
+            // Decidir colors (prioritat: festius > vacances > no assistit > avui)
+            let dayClasses = 'p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[80px] cursor-pointer border-2 transition-all duration-200 hover:shadow-md';
+            let textColor = 'text-gray-800';
+            let badgeText = '';
+
+            if (isGymClosure) {
+              // VERMELL FOSC per festius/tancaments - MÉS VISUAL
+              dayClasses += ' bg-red-600 border-red-800 text-white shadow-lg';
+              textColor = 'text-white';
+              badgeText = 'FESTIU';
+            } else if (isHoliday) {
+              // TARONJA per vacances del gimnàs - MÉS VISUAL
+              dayClasses += ' bg-orange-500 border-orange-700 text-white shadow-md';
+              textColor = 'text-white';
+              badgeText = 'VACANCES';
+            } else if (isMissed) {
+              // GROC per no assistit
+              dayClasses += ' bg-yellow-400 border-yellow-600';
+              badgeText = 'No assistit';
+            } else if (isToday) {
+              // BLAU per avui
+              dayClasses += ' bg-blue-200 border-blue-500';
+            } else {
+              // BLANC/GRIS per dies normals
+              dayClasses += ' bg-gray-100 border-gray-300';
+            }
 
             return (
-              <div
-                key={dateStr}
-                className={`p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[80px] cursor-pointer
-                  ${dateStr === formatDate(todayNormalized) ? 'bg-blue-200 border border-blue-500' : 'bg-gray-100'}
-                  ${isHoliday ? 'bg-red-200 border border-red-500' : ''}
-                  ${isGymClosure ? 'bg-purple-200 border border-purple-500' : ''}
-                  ${isMissed ? 'bg-orange-100 border border-orange-400' : ''}
-                `}
-              >
-                <span className="font-bold">{date.getDate()}</span>
-                {sessionsToDisplay.length > 0 && (
+              <div key={dateStr} className={dayClasses}>
+                <span className={`font-bold text-lg ${textColor}`}>{date.getDate()}</span>
+                
+                {/* Badge amb text més gran i visual */}
+                {badgeText && (
+                  <div className={`absolute top-1 left-1 right-1 text-center font-bold text-[9px] py-0.5 px-1 rounded ${
+                    isGymClosure ? 'bg-red-800 text-white' :
+                    isHoliday ? 'bg-orange-700 text-white' :
+                    'bg-yellow-600 text-white'
+                  }`}>
+                    {badgeText}
+                  </div>
+                )}
+
+                {/* Sessions (només si no és festiu o vacances) */}
+                {sessionsToDisplay.length > 0 && !isGymClosure && !isHoliday && (
                   <div className="flex flex-wrap justify-center mt-1">
-                    {sessionsToDisplay.slice(0, 2).map((session, sIdx) => { // Show up to 2 sessions
+                    {sessionsToDisplay.slice(0, 2).map((session, sIdx) => {
                       const program = programs.find(p => p.id === session.programId);
                       return program ? (
-                        <span key={sIdx} className="text-[9px] font-semibold mx-0.5 px-1 rounded" style={{ backgroundColor: program.color + '30', color: program.color }}>
+                        <span 
+                          key={sIdx} 
+                          className="text-[9px] font-semibold mx-0.5 px-1 rounded shadow-sm" 
+                          style={{ backgroundColor: program.color + '90', color: 'white' }}
+                        >
                           {program.shortName}
                         </span>
                       ) : null;
                     })}
                     {sessionsToDisplay.length > 2 && (
-                      <span className="text-[9px] font-semibold mx-0.5 px-1 rounded bg-gray-300 text-gray-700">+{sessionsToDisplay.length - 2}</span>
+                      <span className="text-[9px] font-semibold mx-0.5 px-1 rounded bg-gray-600 text-white shadow-sm">
+                        +{sessionsToDisplay.length - 2}
+                      </span>
                     )}
                   </div>
                 )}
-                {isHoliday && <span className="text-[10px] text-red-700 mt-1">Vacances</span>}
-                {isGymClosure && <span className="text-[10px] text-purple-700 mt-1">Tancat</span>}
-                {isMissed && (
-                  <span className="absolute top-1 left-1 text-xs text-orange-600" title="Dia no assistit">
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
-                  </span>
-                )}
+
+                {/* Botons d'acció */}
                 <div className="absolute bottom-1 left-0 right-0 flex justify-center space-x-1">
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDayClick(date); }}
-                    className="bg-blue-500 hover:bg-blue-600 text-white p-1 rounded-md text-[8px] leading-none"
+                    className="bg-blue-600 hover:bg-blue-700 text-white p-1 rounded-md text-[8px] leading-none shadow-md"
                     title="Gestionar sessions"
                   >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zm-6.721 6.721A2 2 0 014 14.172V16h1.828l6.172-6.172-2.828-2.828L6.865 10.307zM2 18h16v2H2v-2z"></path></svg>
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zm-6.721 6.721A2 2 0 014 14.172V16h1.828l6.172-6.172-2.828-2.828L6.865 10.307zM2 18h16v2H2v-2z"></path>
+                    </svg>
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleOpenMissedDayModal(date); }}
-                    className="bg-red-500 hover:bg-red-600 text-white p-1 rounded-md text-[8px] leading-none"
+                    className="bg-red-600 hover:bg-red-700 text-white p-1 rounded-md text-[8px] leading-none shadow-md"
                     title="Marcar com a dia no assistit"
                   >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path>
+                    </svg>
                   </button>
                 </div>
               </div>
@@ -388,6 +435,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
           })}
         </div>
       </div>
+
       {showSessionModal && (
         <SessionModal
           show={showSessionModal}
