@@ -2,14 +2,24 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, setDoc } from 'firebase/firestore';
-import { formatDate, normalizeDateToStartOfDay, getLocalDateString, formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx';
+// CANVI AQUÍ: Afegim una nova funció per al format YYYY-MM-DD
+import { normalizeDateToStartOfDay, getLocalDateString, formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx';
 import { getActiveFixedSchedule } from '../../utils/scheduleHelpers.jsx';
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
 import { SessionModal } from '../common/SessionModal.jsx';
 import { MissedDayModal } from '../common/MissedDayModal.jsx';
 import { MessageModal } from '../common/MessageModal.jsx';
 
-// CANVI IMPORTANT: Afegit gymClosures com a propietat obligatòria
+// Funció helper per a obtenir el format de data YYYY-MM-DD
+const formatDateYYYYMMDD = (date) => {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = (d.getMonth() + 1).toString().padStart(2, '0');
+  const day = d.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// CANVI IMPORTANT: Ara gymClosures com a propietat obligatòria
 const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, gymClosures = [], db, currentUserId, appId }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showSessionModal, setShowSessionModal] = useState(false);
@@ -31,7 +41,8 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
   // Helper to get sessions for a specific date
   const getSessionsForDate = (date) => {
     const dateNormalized = normalizeDateToStartOfDay(date);
-    const dateStr = formatDate(dateNormalized);
+    // CANVI AQUÍ: Aquesta funció es manté, perquè és el format que utilitzen les overrides i les vacances individuals
+    const dateStr = formatDateYYYYMMDD(dateNormalized); 
     const dayOfWeek = dateNormalized.getDay();
     const dayName = daysOfWeekNames[dayOfWeek];
 
@@ -42,8 +53,8 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       const recStartDateNormalized = normalizeDateToStartOfDay(new Date(rec.startDate));
       const recEndDateNormalized = rec.endDate ? normalizeDateToStartOfDay(new Date(rec.endDate)) : null;
       return rec.daysOfWeek.includes(dayName) &&
-            dateNormalized.getTime() >= recStartDateNormalized.getTime() &&
-            (!recEndDateNormalized || dateNormalized.getTime() <= recEndDateNormalized.getTime());
+             dateNormalized.getTime() >= recStartDateNormalized.getTime() &&
+             (!recEndDateNormalized || dateNormalized.getTime() <= recEndDateNormalized.getTime());
     });
 
     const override = scheduleOverrides.find(so => so.date === dateStr);
@@ -84,7 +95,8 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       return;
     }
 
-    const dateToSave = formatDate(selectedDate);
+    // CANVI AQUÍ: El format per guardar és YYYY-MM-DD
+    const dateToSave = formatDateYYYYMMDD(selectedDate);
     const scheduleOverridesCollectionPath = getUserCollectionPath(appId, currentUserId, 'scheduleOverrides');
     if (!scheduleOverridesCollectionPath) return;
 
@@ -134,7 +146,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 
   const handleOpenMissedDayModal = (date) => {
     setMissedDayDate(date);
-    const dateStr = formatDate(date);
+    const dateStr = formatDateYYYYMMDD(date);
     const existingMissedEntry = missedDays.find(md => md.date === dateStr);
     
     if (existingMissedEntry) {
@@ -166,7 +178,8 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       const missedDaysCollectionPath = getUserCollectionPath(appId, currentUserId, 'missedDays');
       if (!missedDaysCollectionPath) return;
 
-      const dateToSave = formatDate(date);
+      // CANVI AQUÍ: El format per guardar és YYYY-MM-DD
+      const dateToSave = formatDateYYYYMMDD(date);
       const newMissedDay = { date: dateToSave, assignedGymId: gymId, notes };
 
       const existingMissedDayQuery = query(
@@ -334,15 +347,15 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
             if (!date) return <div key={index} className="p-2"></div>;
 
             const dateNormalized = normalizeDateToStartOfDay(date);
-            const dateStr = formatDate(dateNormalized);
+            const dateStr = formatDateYYYYMMDD(dateNormalized); // CANVI AQUÍ: Usem el format YYYY-MM-DD per a les comparacions
+            const dateStrDDMMYYYY = formatDateDDMMYYYY(dateNormalized); // Aquesta es per mostrar-la a l'usuari
 
             const sessionsToDisplay = getSessionsForDate(date);
 
             // Detectar tipus de dia
-            const isToday = dateStr === formatDate(todayNormalized);
-            // CANVI IMPORTANT: Ara gymClosures està ben definit i és una array
+            const isToday = dateStr === formatDateYYYYMMDD(todayNormalized);
             const isGymClosure = gymClosures && Array.isArray(gymClosures) && gymClosures.some(gc => gc.date === dateStr);
-            const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStr));
+            const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStrDDMMYYYY));
             const currentMissedDayEntry = missedDays.find(md => md.date === dateStr);
             const isMissed = !!currentMissedDayEntry;
 
