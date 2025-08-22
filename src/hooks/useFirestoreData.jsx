@@ -10,6 +10,7 @@ const useFirestoreData = (db, currentUserId, appId, isFirebaseReady, setLoadingM
   const [recurringSessions, setRecurringSessions] = useState([]);
   const [scheduleOverrides, setScheduleOverrides] = useState([]);
   const [missedDays, setMissedDays] = useState([]);
+  const [gymClosures, setGymClosures] = useState([]); // AFEGIT: gymClosures
   const [dataLoaded, setDataLoaded] = useState(false);
 
   // Default initial data for quick setup if Firestore is empty
@@ -140,6 +141,13 @@ const useFirestoreData = (db, currentUserId, appId, isFirebaseReady, setLoadingM
       { id: 'md1', date: '2025-08-05', gymId: 'arbucies', notes: 'Malalt' },
       { id: 'md2', date: '2025-07-28', gymId: 'sant_hilari', notes: 'Viatge' },
     ],
+    // AFEGIT: Dades inicials per a gymClosures
+    gymClosures: [
+      { id: 'gc1', date: '2025-01-01', notes: 'Festiu: Any Nou' },
+      { id: 'gc2', date: '2025-01-06', notes: 'Festiu: Reis' },
+      { id: 'gc3', date: '2025-04-18', notes: 'Festiu: Divendres Sant' },
+      { id: 'gc4', date: '2025-12-25', notes: 'Festiu: Nadal' },
+    ],
   };
 
   // Helper function to populate empty collections with initial data
@@ -176,7 +184,7 @@ const useFirestoreData = (db, currentUserId, appId, isFirebaseReady, setLoadingM
 
     const unsubscribeFunctions = [];
     let collectionsLoaded = 0;
-    const totalCollections = 7; // programs, users, gyms, fixedSchedules, recurringSessions, scheduleOverrides, missedDays
+    const totalCollections = 8; // CANVIAT: Ara són 8 col·leccions (afegit gymClosures)
 
     const markCollectionLoaded = () => {
       collectionsLoaded++;
@@ -234,6 +242,7 @@ const useFirestoreData = (db, currentUserId, appId, isFirebaseReady, setLoadingM
     setupCollectionListener('recurringSessions', setRecurringSessions, initialData.recurringSessions);
     setupCollectionListener('scheduleOverrides', setScheduleOverrides, initialData.scheduleOverrides);
     setupCollectionListener('missedDays', setMissedDays, initialData.missedDays);
+    setupCollectionListener('gymClosures', setGymClosures, initialData.gymClosures); // AFEGIT: Listener per gymClosures
 
     // Cleanup function
     return () => {
@@ -249,6 +258,7 @@ const useFirestoreData = (db, currentUserId, appId, isFirebaseReady, setLoadingM
     recurringSessions, 
     scheduleOverrides, 
     missedDays, 
+    gymClosures, // AFEGIT: Return gymClosures
     setMissedDays, 
     dataLoaded 
   };
