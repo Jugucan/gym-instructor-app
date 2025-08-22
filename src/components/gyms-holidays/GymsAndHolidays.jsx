@@ -1,11 +1,7 @@
-// src/components/gyms-holidays/GymsAndHolidays.jsx
-
 import React, { useState } from 'react';
 import { collection, addDoc, doc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
-// CANVI AQUÍ: Hem eliminat l'import de 'formatDate' perquè ja no el necessitem aquí.
-// Mantenim només les que utilitzes.
-import { formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx'; 
+import { formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx';
 import { MessageModal } from '../common/MessageModal.jsx';
 
 const publicHolidays2025 = [
@@ -36,7 +32,7 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId }) => {
   const [showHolidayModal, setShowHolidayModal] = useState(false);
   const [selectedGymForHoliday, setSelectedGymForHoliday] = useState('');
   // CANVI AQUÍ: La data de vacances es guarda en format YYYY-MM-DD
-  const [holidayDate, setHolidayDate] = useState(''); 
+  const [holidayDate, setHolidayDate] = useState('');
   const [holidayNotes, setHolidayNotes] = useState('');
 
   // NOU: Estats per al modal de Tancaments de Gimnàs
@@ -208,7 +204,7 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId }) => {
       const gymSnap = await getDoc(gymRef);
       // CANVI AQUÍ: La comparació de dates ha de ser amb el format correcte
       const currentHolidays = gymSnap.exists() ? gymSnap.data().holidaysTaken || [] : [];
-      
+     
       if (currentHolidays.includes(holidayDate)) {
         setMessageModalContent({
           title: 'Error',
@@ -358,7 +354,7 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId }) => {
       setShowMessageModal(true);
       return;
     }
-    
+   
     // NOU: Ara aquesta funció afegirà els festius de 2025 com a tancaments
     setMessageModalContent({
       title: 'Suggerir Festius de 2025',
@@ -442,7 +438,7 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId }) => {
           if (gymSnap.exists()) {
             const currentHolidays = gymSnap.data().holidaysTaken || [];
             // CANVI AQUÍ: La comparació és amb el format YYYY-MM-DD
-            const updatedHolidays = currentHolidays.filter(h => h !== dateToDelete); 
+            const updatedHolidays = currentHolidays.filter(h => h !== dateToDelete);
             await updateDoc(gymRef, { holidaysTaken: updatedHolidays });
             setShowMessageModal(true);
             setMessageModalContent({
@@ -549,7 +545,7 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId }) => {
       {/* NOU: Secció per als tancaments de gimnàs (Festius) */}
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Tancaments Generals (Festius)</h2>
-        {gymClosures.length > 0 ? (
+        {gymClosures && gymClosures.length > 0 ? (
           <ul className="space-y-2">
             {gymClosures.sort((a, b) => new Date(a.date) - new Date(b.date)).map(closure => (
               <li key={closure.id} className="flex justify-between items-center bg-gray-100 p-3 rounded-lg">
