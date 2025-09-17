@@ -18,13 +18,31 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
 
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
+  
+  // AFEGIT: Estat per al buscador
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // AFEGIT: Ordenació alfabètica dels usuaris
-  const sortedUsers = useMemo(() => {
-    return [...users].sort((a, b) => {
+  // AFEGIT: Ordenació alfabètica i filtrat dels usuaris
+  const sortedAndFilteredUsers = useMemo(() => {
+    let filteredUsers = users;
+    
+    // Filtrar segons el terme de cerca
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      filteredUsers = users.filter(user => {
+        const gymName = gyms.find(g => g.id === user.gymId)?.name || '';
+        return (
+          user.name.toLowerCase().includes(searchLower) ||
+          gymName.toLowerCase().includes(searchLower)
+        );
+      });
+    }
+    
+    // Ordenar alfabèticament
+    return filteredUsers.sort((a, b) => {
       return a.name.localeCompare(b.name, 'ca', { sensitivity: 'base' });
     });
-  }, [users]);
+  }, [users, searchTerm, gyms]);
 
   // AFEGIT: Funció per obtenir els colors segons el gimnàs
   const getGymColors = (gymId) => {
@@ -193,6 +211,41 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
     <div className="p-6 bg-gray-50 min-h-screen font-inter">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">Gestió d'Usuaris</h1>
 
+      {/* AFEGIT: Buscador */}
+      <div className="mb-6">
+        <div className="relative max-w-md">
+          <input
+            type="text"
+            placeholder="Buscar per nom, cognom o gimnàs..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+          />
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center"
+            >
+              <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {/* AFEGIT: Mostrar nombre d'usuaris trobats */}
+        <p className="text-sm text-gray-600 mt-2">
+          {searchTerm ? 
+            `${sortedAndFilteredUsers.length} usuari${sortedAndFilteredUsers.length !== 1 ? 's' : ''} trobar${sortedAndFilteredUsers.length !== 1 ? 's' : ''} de ${users.length}` : 
+            `${users.length} usuari${users.length !== 1 ? 's' : ''} total${users.length !== 1 ? 's' : ''}`
+          }
+        </p>
+      </div>
+
       {/* AFEGIT: Informació sobre els colors */}
       <div className="mb-4 p-4 bg-white rounded-lg shadow-sm border-l-4 border-gray-400">
         <h3 className="text-sm font-semibold text-gray-700 mb-2">Llegenda de colors:</h3>
@@ -216,48 +269,74 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
       </button>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* MODIFICAT: Usar sortedUsers en lloc de users */}
-        {sortedUsers.map(user => {
-          const gymColors = getGymColors(user.gymId);
-          return (
-            <div key={user.id} className={`bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 flex items-start space-x-4 ${gymColors.border} ${gymColors.background}`}>
-              <img
-                src={user.photoUrl || `https://placehold.co/50x50/aabbcc/ffffff?text=${user.name.charAt(0)}`}
-                alt={user.name}
-                className="w-12 h-12 rounded-full object-cover"
-                onError={(e) => { e.target.onerror = null; e.target.src = `https://placehold.co/50x50/aabbcc/ffffff?text=${user.name.charAt(0)}`; }}
-              />
-              <div className="flex-grow">
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-xl font-semibold text-gray-800">{user.name}</h2>
-                  {/* AFEGIT: Badge per mostrar el gimnàs */}
-                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${gymColors.badge}`}>
-                    {gymColors.gymName}
-                  </span>
+        {/* MODIFICAT: Usar sortedAndFilteredUsers en lloc de sortedUsers */}
+        {sortedAndFilteredUsers.length > 0 ? (
+          sortedAndFilteredUsers.map(user => {
+            const gymColors = getGymColors(user.gymId);
+            return (
+              <div key={user.id} className={`bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 flex items-start space-x-4 ${gymColors.border} ${gymColors.background}`}>
+                <img
+                  src={user.photoUrl || `https://placehold.co/50x50/aabbcc/ffffff?text=${user.name.charAt(0)}`}
+                  alt={user.name}
+                  className="w-12 h-12 rounded-full object-cover"
+                  onError={(e) => { e.target.onerror = null; e.target.src = `https://placehold.co/50x50/aabbcc/ffffff?text=${user.name.charAt(0)}`; }}
+                />
+                <div className="flex-grow">
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-xl font-semibold text-gray-800">{user.name}</h2>
+                    {/* AFEGIT: Badge per mostrar el gimnàs */}
+                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${gymColors.badge}`}>
+                      {gymColors.gymName}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">Aniversari: {formatDate(user.birthday)}</p>
+                  <p className="text-sm text-gray-600">Gimnàs: {gyms.find(g => g.id === user.gymId)?.name || 'N/A'}</p>
+                  {user.usualSessions && user.usualSessions.length > 0 && (
+                    <p className="text-sm text-gray-600">Sessions habituals: {user.usualSessions.join(', ')}</p>
+                  )}
                 </div>
-                <p className="text-sm text-gray-600">Aniversari: {formatDate(user.birthday)}</p>
-                <p className="text-sm text-gray-600">Gimnàs: {gyms.find(g => g.id === user.gymId)?.name || 'N/A'}</p>
-                {user.usualSessions && user.usualSessions.length > 0 && (
-                  <p className="text-sm text-gray-600">Sessions habituals: {user.usualSessions.join(', ')}</p>
-                )}
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handleEditUser(user)}
+                    className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => handleDeleteUser(user.id)}
+                    className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
+                  >
+                    Eliminar
+                  </button>
+                </div>
               </div>
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => handleEditUser(user)}
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
-                >
-                  Editar
-                </button>
-                <button
-                  onClick={() => handleDeleteUser(user.id)}
-                  className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
-                >
-                  Eliminar
-                </button>
-              </div>
+            );
+          })
+        ) : (
+          // AFEGIT: Missatge quan no es troben usuaris
+          <div className="col-span-full text-center py-12">
+            <div className="text-gray-400 mb-4">
+              <svg className="mx-auto h-16 w-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
             </div>
-          );
-        })}
+            <h3 className="text-lg font-medium text-gray-900 mb-1">No s'han trobat usuaris</h3>
+            <p className="text-gray-500">
+              {searchTerm ? 
+                `No hi ha usuaris que coincideixin amb "${searchTerm}"` : 
+                'No tens cap usuari encara'
+              }
+            </p>
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="mt-4 text-blue-600 hover:text-blue-500 font-medium"
+              >
+                Esborrar cerca
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {showUserModal && (
