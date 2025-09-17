@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { collection, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx'; // Confirmat: .jsx
 import { formatDate } from '../../utils/dateHelpers.jsx'; // Confirmat: .jsx
@@ -18,6 +18,40 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
 
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
+
+  // AFEGIT: Ordenació alfabètica dels usuaris
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => {
+      return a.name.localeCompare(b.name, 'ca', { sensitivity: 'base' });
+    });
+  }, [users]);
+
+  // AFEGIT: Funció per obtenir els colors segons el gimnàs
+  const getGymColors = (gymId) => {
+    switch(gymId) {
+      case 'sant_hilari':
+        return {
+          border: 'border-l-4 border-blue-500',
+          background: 'bg-blue-50',
+          badge: 'bg-blue-500 text-white',
+          gymName: 'Sant Hilari'
+        };
+      case 'arbucies':
+        return {
+          border: 'border-l-4 border-green-500',
+          background: 'bg-green-50',
+          badge: 'bg-green-500 text-white',
+          gymName: 'Arbúcies'
+        };
+      default:
+        return {
+          border: 'border-l-4 border-gray-400',
+          background: 'bg-gray-50',
+          badge: 'bg-gray-500 text-white',
+          gymName: 'Desconegut'
+        };
+    }
+  };
 
   const handleSaveUser = async () => {
     if (!db || !currentUserId || !appId) {
@@ -102,7 +136,7 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
     if (!db || !currentUserId || !appId) {
         setMessageModalContent({
           title: 'Error de Connexió',
-          message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+          message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina or contacta amb el suport.',
           isConfirm: false,
           onConfirm: () => setShowMessageModal(false),
         });
@@ -159,6 +193,21 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
     <div className="p-6 bg-gray-50 min-h-screen font-inter">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">Gestió d'Usuaris</h1>
 
+      {/* AFEGIT: Informació sobre els colors */}
+      <div className="mb-4 p-4 bg-white rounded-lg shadow-sm border-l-4 border-gray-400">
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">Llegenda de colors:</h3>
+        <div className="flex space-x-4">
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 bg-blue-500 rounded"></div>
+            <span className="text-sm text-gray-600">Sant Hilari</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 bg-green-500 rounded"></div>
+            <span className="text-sm text-gray-600">Arbúcies</span>
+          </div>
+        </div>
+      </div>
+
       <button
         onClick={() => { setShowUserModal(true); setEditingUser(null); setUserName(''); setUserBirthday(''); setUserSessions(''); setUserNotes(''); setUserGymId(''); setUserPhone(''); setUserEmail(''); setUserPhotoUrl(''); }}
         className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out mb-6"
@@ -167,38 +216,48 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
       </button>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {users.map(user => (
-          <div key={user.id} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 flex items-center space-x-4">
-            <img
-              src={user.photoUrl || `https://placehold.co/50x50/aabbcc/ffffff?text=${user.name.charAt(0)}`}
-              alt={user.name}
-              className="w-12 h-12 rounded-full object-cover"
-              onError={(e) => { e.target.onerror = null; e.target.src = `https://placehold.co/50x50/aabbcc/ffffff?text=${user.name.charAt(0)}`; }}
-            />
-            <div className="flex-grow">
-              <h2 className="text-xl font-semibold text-gray-800">{user.name}</h2>
-              <p className="text-sm text-gray-600">Aniversari: {formatDate(user.birthday)}</p>
-              <p className="text-sm text-gray-600">Gimnàs: {gyms.find(g => g.id === user.gymId)?.name || 'N/A'}</p>
-              {user.usualSessions && user.usualSessions.length > 0 && (
-                <p className="text-sm text-gray-600">Sessions habituals: {user.usualSessions.join(', ')}</p>
-              )}
+        {/* MODIFICAT: Usar sortedUsers en lloc de users */}
+        {sortedUsers.map(user => {
+          const gymColors = getGymColors(user.gymId);
+          return (
+            <div key={user.id} className={`bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 flex items-start space-x-4 ${gymColors.border} ${gymColors.background}`}>
+              <img
+                src={user.photoUrl || `https://placehold.co/50x50/aabbcc/ffffff?text=${user.name.charAt(0)}`}
+                alt={user.name}
+                className="w-12 h-12 rounded-full object-cover"
+                onError={(e) => { e.target.onerror = null; e.target.src = `https://placehold.co/50x50/aabbcc/ffffff?text=${user.name.charAt(0)}`; }}
+              />
+              <div className="flex-grow">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-xl font-semibold text-gray-800">{user.name}</h2>
+                  {/* AFEGIT: Badge per mostrar el gimnàs */}
+                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${gymColors.badge}`}>
+                    {gymColors.gymName}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600">Aniversari: {formatDate(user.birthday)}</p>
+                <p className="text-sm text-gray-600">Gimnàs: {gyms.find(g => g.id === user.gymId)?.name || 'N/A'}</p>
+                {user.usualSessions && user.usualSessions.length > 0 && (
+                  <p className="text-sm text-gray-600">Sessions habituals: {user.usualSessions.join(', ')}</p>
+                )}
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => handleEditUser(user)}
+                  className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
+                >
+                  Editar
+                </button>
+                <button
+                  onClick={() => handleDeleteUser(user.id)}
+                  className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
+                >
+                  Eliminar
+                </button>
+              </div>
             </div>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => handleEditUser(user)}
-                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
-              >
-                Editar
-              </button>
-              <button
-                onClick={() => handleDeleteUser(user.id)}
-                className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
-              >
-                Eliminar
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {showUserModal && (
