@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, onSnapshot, updateDoc, deleteDoc, addDoc, getDocs, doc, where } from 'firebase/firestore';
-import { getLocalDateString, normalizeDateToStartOfDay, formatDate } from '../../utils/dateHelpers.jsx';
+import { getLocalDateString, normalizeDateToStartOfDay, formatDate, formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx';
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
 import { MessageModal } from '../common/MessageModal.jsx';
 import { SessionModal } from '../common/SessionModal.jsx';
@@ -223,7 +223,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
     if (!db || !currentUserId || !appId) {
       setMessageModalContent({
         title: 'Error de Connexió',
-        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
+        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina or contacta amb el suport.',
         isConfirm: false,
         onConfirm: () => setShowMessageModal(false),
       });
@@ -492,6 +492,30 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
       {/* Mini Calendar */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Calendari (Mes Actual)</h2>
+        
+        {/* AFEGIT: Llegenda de colors igual que al FullCalendar */}
+        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Llegenda:</h3>
+          <div className="flex flex-wrap gap-4 text-xs">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-blue-200 border border-blue-500 rounded"></div>
+              <span>Avui</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-red-600 rounded"></div>
+              <span className="text-white bg-red-600 px-1 rounded">Festius/Tancaments</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-orange-500 rounded"></div>
+              <span className="text-white bg-orange-500 px-1 rounded">Vacances Gimnàs</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-yellow-400 border border-yellow-600 rounded"></div>
+              <span>No Assistit</span>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-7 gap-2 text-center text-sm font-medium text-gray-600 mb-2">
           {['Dl', 'Dm', 'Dc', 'Dj', 'Dv', 'Ds', 'Dg'].map(day => (
             <div key={day}>{day}</div>
@@ -504,71 +528,101 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
 
               const dateNormalized = normalizeDateToStartOfDay(date);
               const dateStr = getLocalDateString(dateNormalized);
+              const dateStrDDMMYYYY = formatDateDDMMYYYY(dateNormalized); // AFEGIT: Format DD-MM-YYYY per festius
 
               const sessionsToDisplay = getSessionsForDate(date);
               
-              const isGymClosure = gymClosures.some(gc => getLocalDateString(new Date(gc.date)) === dateStr);
-              const isHoliday = gyms.some(gym => gym.holidaysTaken.includes(dateStr));
+              // MODIFICAT: Usar el mateix format que al FullCalendar
+              const isToday = dateStr === getLocalDateString(normalizeDateToStartOfDay(new Date()));
+              const isGymClosure = gymClosures && Array.isArray(gymClosures) && gymClosures.some(gc => gc.date === dateStrDDMMYYYY);
+              const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(formatDate(dateNormalized)));
               const isMissed = missedDays.some(md => normalizeDateToStartOfDay(new Date(md.date)).getTime() === dateNormalized.getTime());
 
-              let dayClass = 'bg-gray-100';
-              let tooltipText = '';
+              // MODIFICAT: Aplicar els mateixos colors que al FullCalendar
+              let dayClasses = 'p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[60px] cursor-pointer border-2 transition-all duration-200 hover:shadow-md';
+              let textColor = 'text-gray-800';
               let badgeText = '';
 
-              if (dateStr === getLocalDateString(normalizeDateToStartOfDay(new Date()))) {
-                  dayClass = 'bg-blue-200 border border-blue-500';
-              }
-              
-              if (isMissed) {
-                  dayClass = 'bg-red-100 border border-red-400';
-                  badgeText = 'No assistit';
-              }
-              if (isHoliday) {
-                  dayClass = 'bg-red-200 border border-red-500';
-                  badgeText = 'Vacances';
-              }
+              // Prioritat: festius > vacances > no assistit > avui
               if (isGymClosure) {
-                  dayClass = 'bg-purple-200 border border-purple-500';
-                  badgeText = 'Festiu';
+                // VERMELL FOSC per festius/tancaments - IGUAL que al FullCalendar
+                dayClasses += ' bg-red-600 border-red-800 text-white shadow-lg';
+                textColor = 'text-white';
+                badgeText = 'FESTIU';
+              } else if (isHoliday) {
+                // TARONJA per vacances del gimnàs - IGUAL que al FullCalendar
+                dayClasses += ' bg-orange-500 border-orange-700 text-white shadow-md';
+                textColor = 'text-white';
+                badgeText = 'VACANCES';
+              } else if (isMissed) {
+                // GROC per no assistit
+                dayClasses += ' bg-yellow-400 border-yellow-600';
+                badgeText = 'No assistit';
+              } else if (isToday) {
+                // BLAU per avui
+                dayClasses += ' bg-blue-200 border-blue-500';
+              } else {
+                // BLANC/GRIS per dies normals
+                dayClasses += ' bg-gray-100 border-gray-300';
               }
 
               return (
-                <div
-                  key={dateStr}
-                  className={`p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[60px] ${dayClass}`}
-                >
-                  <span className="font-bold">{date.getDate()}</span>
-                  {sessionsToDisplay.length > 0 && !isHoliday && !isGymClosure && (
+                <div key={dateStr} className={dayClasses}>
+                  <span className={`font-bold text-lg ${textColor}`}>{date.getDate()}</span>
+                  
+                  {/* Badge amb text més gran i visual - IGUAL que al FullCalendar */}
+                  {badgeText && (
+                    <div className={`absolute top-1 left-1 right-1 text-center font-bold text-[9px] py-0.5 px-1 rounded ${
+                      isGymClosure ? 'bg-red-800 text-white' :
+                      isHoliday ? 'bg-orange-700 text-white' :
+                      'bg-yellow-600 text-white'
+                    }`}>
+                      {badgeText}
+                    </div>
+                  )}
+
+                  {/* Sessions (només si no és festiu o vacances) */}
+                  {sessionsToDisplay.length > 0 && !isGymClosure && !isHoliday && (
                     <div className="flex flex-wrap justify-center mt-1">
                       {sessionsToDisplay.slice(0, 2).map((session, sIdx) => {
                         const program = programs.find(p => p.id === session.programId);
                         return program ? (
-                          <span key={sIdx} className="text-[9px] font-semibold mx-0.5 px-1 rounded" style={{ backgroundColor: program.color + '30', color: program.color }}>
+                          <span 
+                            key={sIdx} 
+                            className="text-[9px] font-semibold mx-0.5 px-1 rounded shadow-sm" 
+                            style={{ backgroundColor: program.color + '90', color: 'white' }}
+                          >
                             {program.shortName}
                           </span>
                         ) : null;
                       })}
                       {sessionsToDisplay.length > 2 && (
-                        <span className="text-[9px] font-semibold mx-0.5 px-1 rounded bg-gray-300 text-gray-700">+{sessionsToDisplay.length - 2}</span>
+                        <span className="text-[9px] font-semibold mx-0.5 px-1 rounded bg-gray-600 text-white shadow-sm">
+                          +{sessionsToDisplay.length - 2}
+                        </span>
                       )}
                     </div>
                   )}
-                  {badgeText && <span className="text-[10px] mt-1 font-semibold text-gray-700">{badgeText}</span>}
-                  
+
+                  {/* Botons d'acció */}
                   <div className="absolute bottom-1 left-0 right-0 flex justify-center space-x-1">
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDayClick(date); }}
-                      className="bg-blue-500 hover:bg-blue-600 text-white p-1 rounded-md text-[8px] leading-none"
+                      className="bg-blue-600 hover:bg-blue-700 text-white p-1 rounded-md text-[8px] leading-none shadow-md"
                       title="Gestionar sessions"
                     >
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zm-6.721 6.721A2 2 0 014 14.172V16h1.828l6.172-6.172-2.828-2.828L6.865 10.307zM2 18h16v2H2v-2z"></path></svg>
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zm-6.721 6.721A2 2 0 014 14.172V16h1.828l6.172-6.172-2.828-2.828L6.865 10.307zM2 18h16v2H2v-2z"></path>
+                      </svg>
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleOpenMissedDayModal(date); }}
-                      className="bg-red-500 hover:bg-red-600 text-white p-1 rounded-md text-[8px] leading-none"
+                      className="bg-red-600 hover:bg-red-700 text-white p-1 rounded-md text-[8px] leading-none shadow-md"
                       title="Marcar com a dia no assistit"
                     >
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path>
+                      </svg>
                     </button>
                   </div>
                 </div>
