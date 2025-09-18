@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { collection, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx'; // Confirmat: .jsx
-import { formatDate } from '../../utils/dateHelpers.jsx'; // Confirmat: .jsx
+import { formatDate, formatBirthdayWithAge } from '../../utils/dateHelpers.jsx'; // Confirmat: .jsx
 import { MessageModal } from '../common/MessageModal.jsx'; // Confirmat: .jsx
 
 const Users = ({ users, gyms, db, currentUserId, appId }) => {
@@ -289,7 +289,7 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
                       {gymColors.gymName}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600">Aniversari: {formatDate(user.birthday)}</p>
+                  <p className="text-sm text-gray-600">Aniversari: {formatBirthdayWithAge(user.birthday)}</p>
                   <p className="text-sm text-gray-600">Gimnàs: {gyms.find(g => g.id === user.gymId)?.name || 'N/A'}</p>
                   {user.usualSessions && user.usualSessions.length > 0 && (
                     <p className="text-sm text-gray-600">Sessions habituals: {user.usualSessions.join(', ')}</p>
