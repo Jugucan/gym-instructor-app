@@ -159,3 +159,63 @@ export const normalizeDateToStartOfDay = (date) => {
   newDate.setHours(0, 0, 0, 0);
   return newDate;
 };
+
+/**
+ * AFEGIT: Calcula l'edat actual basada en una data d'aniversari.
+ * @param {string|Date} birthDateValue - La data d'aniversari (YYYY-MM-DD string o Date object).
+ * @returns {number} L'edat en anys, o null si la data és invàlida.
+ */
+export const calculateAge = (birthDateValue) => {
+  if (!birthDateValue) return null;
+  
+  let birthDate;
+  
+  if (birthDateValue instanceof Date) {
+    birthDate = birthDateValue;
+  } else if (typeof birthDateValue === 'string') {
+    // Handle YYYY-MM-DD format
+    if (/^\d{4}-\d{2}-\d{2}$/.test(birthDateValue)) {
+      birthDate = new Date(`${birthDateValue}T00:00:00`);
+    }
+    // Handle DD-MM-YYYY format
+    else if (/^\d{2}-\d{2}-\d{4}$/.test(birthDateValue)) {
+      const [day, month, year] = birthDateValue.split('-');
+      birthDate = new Date(`${year}-${month}-${day}T00:00:00`);
+    } else {
+      birthDate = new Date(birthDateValue);
+    }
+  } else {
+    return null;
+  }
+  
+  if (isNaN(birthDate.getTime())) {
+    return null;
+  }
+  
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDifference = today.getMonth() - birthDate.getMonth();
+  
+  // Si encara no ha arribat l'aniversari aquest any, restem un any
+  if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  
+  return age;
+};
+
+/**
+ * AFEGIT: Formata una data d'aniversari mostrant la data en format DD-MM-YYYY i l'edat actual.
+ * @param {string|Date} birthDateValue - La data d'aniversari.
+ * @returns {string} La data formatada amb l'edat (ex: "07-08-1990 (34 anys)").
+ */
+export const formatBirthdayWithAge = (birthDateValue) => {
+  const formattedDate = formatDateDDMMYYYY(birthDateValue);
+  const age = calculateAge(birthDateValue);
+  
+  if (formattedDate === 'N/A' || age === null) {
+    return formattedDate;
+  }
+  
+  return `${formattedDate} (${age} any${age !== 1 ? 's' : ''})`;
+};
