@@ -545,24 +545,17 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
 
               // Prioritat: festius > vacances > no assistit > avui
               if (isGymClosure) {
-                // VERMELL FOSC per festius/tancaments - IGUAL que al FullCalendar
-                dayClasses += ' bg-red-600 border-red-800 text-white shadow-lg';
-                textColor = 'text-white';
-                badgeText = 'FESTIU';
+                  dayClasses += ' bg-purple-200 border-purple-500';
+                  badgeText = 'Festiu';
               } else if (isHoliday) {
-                // TARONJA per vacances del gimnàs - IGUAL que al FullCalendar
-                dayClasses += ' bg-orange-500 border-orange-700 text-white shadow-md';
-                textColor = 'text-white';
-                badgeText = 'VACANCES';
+                  dayClasses += ' bg-red-200 border-red-500';
+                  badgeText = 'Vacances';
               } else if (isMissed) {
-                // GROC per no assistit
-                dayClasses += ' bg-yellow-400 border-yellow-600';
-                badgeText = 'No assistit';
+                  dayClasses += ' bg-yellow-200 border-yellow-600';
+                  badgeText = 'No assistit';
               } else if (isToday) {
-                // BLAU per avui
-                dayClasses += ' bg-blue-200 border-blue-500';
+                  dayClasses += ' bg-blue-200 border-blue-500';
               } else {
-                // BLANC/GRIS per dies normals
                 dayClasses += ' bg-gray-100 border-gray-300';
               }
 
@@ -675,3 +668,4 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
 };
 
 export default Dashboard;
+
