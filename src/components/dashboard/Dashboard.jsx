@@ -24,6 +24,9 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
+  // Debug dels festius - això ens ajudarà a identificar el problema
+  console.log('Dashboard gymClosures:', gymClosures);
+
   const getUserPath = (collectionName) => {
     if (!currentUserId || !appId) {
       console.error("currentUserId or appId is not available for collection path.");
@@ -493,7 +496,7 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Calendari (Mes Actual)</h2>
         
-        {/* AFEGIT: Llegenda de colors amb colors més suaus */}
+        {/* Llegenda de colors suaus */}
         <div className="mb-4 p-4 bg-gray-50 rounded-lg">
           <h3 className="text-sm font-semibold text-gray-700 mb-2">Llegenda:</h3>
           <div className="flex flex-wrap gap-4 text-xs">
@@ -528,94 +531,105 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
 
               const dateNormalized = normalizeDateToStartOfDay(date);
               const dateStr = getLocalDateString(dateNormalized);
-              const dateStrDDMMYYYY = formatDateDDMMYYYY(dateNormalized); // AFEGIT: Format DD-MM-YYYY per festius
+              const dateStrDDMMYYYY = formatDateDDMMYYYY(dateNormalized);
+              const dateStrYYYYMMDD = formatDate(dateNormalized);
 
               const sessionsToDisplay = getSessionsForDate(date);
               
-              // MODIFICAT: Usar el mateix format que al FullCalendar
+              // Detecció millorada amb debug
               const isToday = dateStr === getLocalDateString(normalizeDateToStartOfDay(new Date()));
-              const isGymClosure = gymClosures && Array.isArray(gymClosures) && gymClosures.some(gc => gc.date === dateStrDDMMYYYY);
-              const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(formatDate(dateNormalized)));
+              
+              // Debug per aquest dia específic
+              const debugDate = date.getDate() === 11 && date.getMonth() === 8; // 11 de setembre (mes 8 = setembre)
+              if (debugDate) {
+                console.log('=== DEBUG 11 SETEMBRE ===');
+                console.log('dateStr:', dateStr);
+                console.log('dateStrDDMMYYYY:', dateStrDDMMYYYY);
+                console.log('dateStrYYYYMMDD:', dateStrYYYYMMDD);
+                console.log('gymClosures:', gymClosures);
+                if (gymClosures) {
+                  gymClosures.forEach((gc, idx) => {
+                    console.log(`Festiu ${idx}:`, gc);
+                    console.log(`  gc.date === dateStrDDMMYYYY:`, gc.date === dateStrDDMMYYYY);
+                    console.log(`  gc.date === dateStrYYYYMMDD:`, gc.date === dateStrYYYYMMDD);
+                    console.log(`  gc.date === dateStr:`, gc.date === dateStr);
+                  });
+                }
+              }
+
+              // Detecció de festius amb múltiples formats
+              const isGymClosure = gymClosures && Array.isArray(gymClosures) && gymClosures.some(gc => {
+                const matches = gc.date === dateStrDDMMYYYY || gc.date === dateStrYYYYMMDD || gc.date === dateStr;
+                if (debugDate && matches) {
+                  console.log('FESTIU DETECTAT!', gc);
+                }
+                return matches;
+              });
+              
+              const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStrYYYYMMDD));
               const isMissed = missedDays.some(md => normalizeDateToStartOfDay(new Date(md.date)).getTime() === dateNormalized.getTime());
 
-              // MODIFICAT: Aplicar els mateixos colors que al FullCalendar
-              let dayClasses = 'p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[60px] cursor-pointer border-2 transition-all duration-200 hover:shadow-md';
-              let textColor = 'text-gray-800';
+              if (debugDate) {
+                console.log('isGymClosure:', isGymClosure);
+                console.log('isHoliday:', isHoliday);
+                console.log('isMissed:', isMissed);
+              }
+
+              // Colors suaus i harmònics
+              let dayClass = 'bg-gray-100 border-gray-300';
               let badgeText = '';
 
               // Prioritat: festius > vacances > no assistit > avui
               if (isGymClosure) {
-                  dayClasses += ' bg-purple-200 border-purple-500';
-                  badgeText = 'Festiu';
+                dayClass = 'bg-purple-200 border-purple-500';
+                badgeText = 'Festiu';
               } else if (isHoliday) {
-                  dayClasses += ' bg-red-200 border-red-500';
-                  badgeText = 'Vacances';
+                dayClass = 'bg-red-200 border-red-500';
+                badgeText = 'Vacances';
               } else if (isMissed) {
-                  dayClasses += ' bg-yellow-200 border-yellow-600';
-                  badgeText = 'No assistit';
+                dayClass = 'bg-yellow-200 border-yellow-600';
+                badgeText = 'No assistit';
               } else if (isToday) {
-                  dayClasses += ' bg-blue-200 border-blue-500';
-              } else {
-                dayClasses += ' bg-gray-100 border-gray-300';
+                dayClass = 'bg-blue-200 border-blue-500';
               }
 
               return (
-                <div key={dateStr} className={dayClasses}>
-                  <span className={`font-bold text-lg ${textColor}`}>{date.getDate()}</span>
-                  
-                  {/* Badge amb text més gran i visual - IGUAL que al FullCalendar */}
-                  {badgeText && (
-                    <div className={`absolute top-1 left-1 right-1 text-center font-bold text-[9px] py-0.5 px-1 rounded ${
-                      isGymClosure ? 'bg-red-800 text-white' :
-                      isHoliday ? 'bg-orange-700 text-white' :
-                      'bg-yellow-600 text-white'
-                    }`}>
-                      {badgeText}
-                    </div>
-                  )}
-
-                  {/* Sessions (només si no és festiu o vacances) */}
+                <div
+                  key={dateStr}
+                  className={`p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[60px] ${dayClass} border-2`}
+                >
+                  <span className="font-bold text-gray-800">{date.getDate()}</span>
                   {sessionsToDisplay.length > 0 && !isGymClosure && !isHoliday && (
                     <div className="flex flex-wrap justify-center mt-1">
                       {sessionsToDisplay.slice(0, 2).map((session, sIdx) => {
                         const program = programs.find(p => p.id === session.programId);
                         return program ? (
-                          <span 
-                            key={sIdx} 
-                            className="text-[9px] font-semibold mx-0.5 px-1 rounded shadow-sm" 
-                            style={{ backgroundColor: program.color + '90', color: 'white' }}
-                          >
+                          <span key={sIdx} className="text-[9px] font-semibold mx-0.5 px-1 rounded" style={{ backgroundColor: program.color + '30', color: program.color }}>
                             {program.shortName}
                           </span>
                         ) : null;
                       })}
                       {sessionsToDisplay.length > 2 && (
-                        <span className="text-[9px] font-semibold mx-0.5 px-1 rounded bg-gray-600 text-white shadow-sm">
-                          +{sessionsToDisplay.length - 2}
-                        </span>
+                        <span className="text-[9px] font-semibold mx-0.5 px-1 rounded bg-gray-300 text-gray-700">+{sessionsToDisplay.length - 2}</span>
                       )}
                     </div>
                   )}
-
-                  {/* Botons d'acció */}
+                  {badgeText && <span className="text-[10px] mt-1 font-semibold text-gray-700">{badgeText}</span>}
+                  
                   <div className="absolute bottom-1 left-0 right-0 flex justify-center space-x-1">
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDayClick(date); }}
-                      className="bg-blue-600 hover:bg-blue-700 text-white p-1 rounded-md text-[8px] leading-none shadow-md"
+                      className="bg-blue-500 hover:bg-blue-600 text-white p-1 rounded-md text-[8px] leading-none"
                       title="Gestionar sessions"
                     >
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zm-6.721 6.721A2 2 0 014 14.172V16h1.828l6.172-6.172-2.828-2.828L6.865 10.307zM2 18h16v2H2v-2z"></path>
-                      </svg>
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zm-6.721 6.721A2 2 0 014 14.172V16h1.828l6.172-6.172-2.828-2.828L6.865 10.307zM2 18h16v2H2v-2z"></path></svg>
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleOpenMissedDayModal(date); }}
-                      className="bg-red-600 hover:bg-red-700 text-white p-1 rounded-md text-[8px] leading-none shadow-md"
+                      className="bg-red-500 hover:bg-red-600 text-white p-1 rounded-md text-[8px] leading-none"
                       title="Marcar com a dia no assistit"
                     >
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path>
-                      </svg>
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
                     </button>
                   </div>
                 </div>
@@ -668,5 +682,3 @@ const Dashboard = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, r
 };
 
 export default Dashboard;
-
-
