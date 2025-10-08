@@ -107,17 +107,15 @@ export const transformSimpleDatesToEvents = (dateList, title, color, type) => {
   if (!dateList || dateList.length === 0) return [];
 
   return dateList.map(dateStr => {
-    // FullCalendar requereix 'start' en format ISO8601.
-    // El 'dateStr' ja hauria de ser YYYY-MM-DD, que és el format ISO per a un dia.
     const isoDate = formatDate(dateStr); 
 
     return {
       title: title,
       start: isoDate,
       allDay: true,
-      backgroundColor: color, // El codi de color hexadecimal
+      backgroundColor: color, 
       borderColor: color,
-      textColor: '#FFFFFF',   // Per a un bon contrast
+      textColor: '#FFFFFF',   
       extendedProps: {
         eventType: type, 
       }
@@ -137,19 +135,13 @@ export const transformDateRangesToEvents = (rangeList, color) => {
     if (!rangeList || rangeList.length === 0) return [];
 
     return rangeList.map(range => {
-        // Assegurem que les dates de rang siguin en format ISO8601 (YYYY-MM-DD)
         const start = formatDate(range.startDate);
         const end = formatDate(range.endDate);
-
-        // Aquesta funció pot ser complexa si la 'endDate' a Firebase és l'últim dia INCLÒS.
-        // FullCalendar vol el dia DESPRÉS. Com que no tenim una llibreria de dates,
-        // confiem en què la teva lògica actual ja ho gestiona.
-        // Si les teves vacances de l'1 al 5 acaben el 6-01 (format FullCalendar), no cal fer res.
         
         return {
             title: `Vacances: ${range.name || 'Gimnàs Tancat'}`,
             start: start,
-            end: end, // Potser necessita ajust +1 dia si 'endDate' és l'últim dia inclòs.
+            end: end,
             allDay: true,
             backgroundColor: color,
             borderColor: color,
@@ -161,45 +153,54 @@ export const transformDateRangesToEvents = (rangeList, color) => {
     });
 };
 
-// **Deixem la funció per calcular l'edat tal qual (si la fas servir):**
+/**
+ * Calcula l'edat d'una persona a partir de la seva data de naixement.
+ * @param {string|Date} birthDateValue - Data de naixement en format string (DD-MM-YYYY, YYYY-MM-DD) o Date object.
+ * @returns {number|null} L'edat en anys, o null si la data no és vàlida.
+ */
 export const calculateAge = (birthDateValue) => {
-    let birthDate;
-    
-    if (birthDateValue instanceof Date) {
-      birthDate = birthDateValue;
-    } else if (typeof birthDateValue === 'string') {
-      // Handle YYYY-MM-DD format
-      if (/^\d{4}-\d{2}-\d{2}$/.test(birthDateValue)) {
-        birthDate = new Date(`${birthDateValue}T00:00:00`);
-      }
-      // Handle DD-MM-YYYY format
-      else if (/^\d{2}-\d{2}-\d{4}$/.test(birthDateValue)) {
-        const [day, month, year] = birthDateValue.split('-');
-        birthDate = new Date(`${year}-${month}-${day}T00:00:00`);
-      } else {
-        birthDate = new Date(birthDateValue);
-      }
+  let birthDate;
+  
+  if (birthDateValue instanceof Date) {
+    birthDate = birthDateValue;
+  } else if (typeof birthDateValue === 'string') {
+    // Handle YYYY-MM-DD format
+    if (/^\d{4}-\d{2}-\d{2}$/.test(birthDateValue)) {
+      birthDate = new Date(`${birthDateValue}T00:00:00`);
+    }
+    // Handle DD-MM-YYYY format
+    else if (/^\d{2}-\d{2}-\d{4}$/.test(birthDateValue)) {
+      const [day, month, year] = birthDateValue.split('-');
+      birthDate = new Date(`${year}-${month}-${day}T00:00:00`);
     } else {
-      return null;
+      birthDate = new Date(birthDateValue);
     }
-    
-    if (isNaN(birthDate.getTime())) {
-      return null;
-    }
-    
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDifference = today.getMonth() - birthDate.getMonth();
-    
-    if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    
-    return age;
+  } else {
+    return null;
+  }
+  
+  if (isNaN(birthDate.getTime())) {
+    return null;
+  }
+  
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDifference = today.getMonth() - birthDate.getMonth();
+  
+  if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  
+  return age;
 };
 
-// **Deixem la funció per formatar la data d'aniversari tal qual (si la fas servir):**
-export const formatBirthDateWithAge = (birthDateValue) => {
+/**
+ * CORRECCIÓ: Formata una data d'aniversari mostrant la data en format DD-MM-YYYY i l'edat actual.
+ * El nom de la funció ha de ser 'formatBirthdayWithAge' per a evitar l'error.
+ * @param {string|Date} birthDateValue - Data de naixement.
+ * @returns {string} La data formatada amb l'edat (p. ex., "01-01-1990 (35 anys)").
+ */
+export const formatBirthdayWithAge = (birthDateValue) => {
     const age = calculateAge(birthDateValue);
     const formattedDate = formatDateDDMMYYYY(birthDateValue);
     
