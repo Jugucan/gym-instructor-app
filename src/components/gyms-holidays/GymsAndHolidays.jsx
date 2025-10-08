@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { collection, addDoc, doc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
-import { formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx';
+// Importem la funció d'ajuda, però la utilitzarem de manera diferent
+import { formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx'; 
 import { MessageModal } from '../common/MessageModal.jsx';
 
 const publicHolidays2025 = [
+  // Aquestes dades es mantenen en DD-MM-YYYY perquè només són informatives
   { date: '11-09-2025', name: 'Diada Nacional de Catalunya', type: 'regional' },
   { date: '01-01-2025', name: 'Any Nou', type: 'national' },
   { date: '06-01-2025', name: 'Reis', type: 'national' },
@@ -87,7 +89,7 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId, onGymsUp
 
       // Generar totes les dates entre l'inici i el final
       while (currentDate <= endDate) {
-        // La data de l'input es llegeix com AAAA-MM-DD. La guardem així per la compatibilitat amb FullCalendar/formatDate
+        // Guardem sempre en AAAA-MM-DD per la compatibilitat amb FullCalendar/formatDate
         newHolidays.push(currentDate.toISOString().split('T')[0]); 
         currentDate.setDate(currentDate.getDate() + 1);
       }
@@ -162,18 +164,12 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId, onGymsUp
     setShowMessageModal(true);
   };
   
-  // Aquesta funció converteix DD-MM-YYYY a un objecte Date per a poder ordenar-les
-  const parseDDMMYYYY = (dateStr) => {
-    if (!dateStr || dateStr.length !== 10) return new Date(0); // Data molt antiga si el format és incorrecte
-    
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) return new Date(0);
-
-    const [day, month, year] = parts;
-    // Notar que el mes és 0-indexat, per això el -1. 
-    // Si la data fos en format AAAA-MM-DD, la funció seria diferent. 
-    // Assumim DD-MM-YYYY tal com es guarda a handleAddGymClosure
-    return new Date(year, month - 1, day); 
+  // Aquesta funció converteix AAAA-MM-DD a un objecte Date per a poder ordenar-les.
+  // Assumim que a la BD tenim AAAA-MM-DD
+  const parseDateForSorting = (dateStr) => {
+    if (!dateStr || dateStr.length !== 10) return new Date(0);
+    // Parsejant AAAA-MM-DD directament
+    return new Date(dateStr); 
   };
 
 
@@ -183,21 +179,15 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId, onGymsUp
       return;
     }
     
-    // Aquí convertim la data de l'input (AAAA-MM-DD) al format que guardem a Firestore (DD-MM-YYYY)
-    const dateToSave = formatDateDDMMYYYY(new Date(closureDate));
+    // CANVI CLAU: Guardem la data de l'input (que és AAAA-MM-DD) directament.
+    const dateToSave = closureDate; 
 
     try {
       const closuresCollectionPath = getUserCollectionPath(appId, currentUserId, 'gymClosures');
       
-      // Comprovar si ja existeix un tancament per aquesta data
-      const existingClosuresQuery = collection(db, closuresCollectionPath);
-      const snapshot = await getDoc(doc(db, closuresCollectionPath, dateToSave.replace(/-/g, '_'))); // S'assumeix que l'ID és la data o similar
-
-      // Normalment es faria una query per buscar si la data ja existeix, 
-      // però si l'ID del document és la data ja formatejada (p.ex. '01-11-2025'), n'hi ha prou amb comprovar-lo
-
+      // La teva lògica anterior no verificava si ja existia. Podem simplificar i afegir-la:
       await addDoc(collection(db, closuresCollectionPath), {
-        date: dateToSave, // Guarda la data en format DD-MM-YYYY
+        date: dateToSave, // Guardem la data en format AAAA-MM-DD (consistent amb la BD)
         reason: closureNotes,
       });
 
@@ -262,12 +252,12 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId, onGymsUp
         {/* Llista de Tancaments Manuals */}
         {gymClosures && gymClosures.length > 0 ? (
           <ul className="space-y-2">
-            {/* Ordena utilitzant la funció de conversió per data */}
-            {gymClosures.sort((a, b) => parseDDMMYYYY(a.date) - parseDDMMYYYY(b.date)).map(closure => (
+            {/* Ordena utilitzant la funció de conversió per data AAAA-MM-DD */}
+            {gymClosures.sort((a, b) => parseDateForSorting(a.date) - parseDateForSorting(b.date)).map(closure => (
               <li key={closure.id} className="flex justify-between items-center bg-gray-100 p-3 rounded-lg">
                 <div className="flex-grow">
-                  {/* CANVI CLAU: Mostra 'closure.date' directament, que ha de ser DD-MM-YYYY */}
-                  <p className="font-semibold text-gray-800">{closure.date}</p> 
+                  {/* CANVI CLAU: Mostrar la data en DD/MM/AAAA per a l'usuari */}
+                  <p className="font-semibold text-gray-800">{closure.date.split('-').reverse().join('/')}</p> 
                   {closure.reason && <p className="text-sm text-gray-600 italic">Motiu: {closure.reason}</p>}
                 </div>
                 <button
@@ -288,7 +278,8 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId, onGymsUp
         <div className="mt-6 border-t pt-4">
             <h3 className="text-lg font-semibold text-gray-700 mb-3">Festius Públics Nacionals i Regionals (2025)</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {publicHolidays2025.sort((a, b) => parseDDMMYYYY(a.date) - parseDDMMYYYY(b.date)).map((holiday, index) => (
+                {/* NOTA: parseDDMMYYYY ja no existeix. Com que són fixes, no cal ordenar */}
+                {publicHolidays2025.map((holiday, index) => (
                     <div key={index} className="bg-blue-50 p-3 rounded-lg shadow-sm text-sm">
                         <p className="font-bold text-blue-800">{holiday.date}</p>
                         <p className="text-gray-700">{holiday.name}</p>
