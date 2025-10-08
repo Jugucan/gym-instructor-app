@@ -44,9 +44,9 @@ export const calculateRecurringSessionMinutes = (dayName, recurringSessions) => 
 };
 
 /**
- * Funció Dummy: Assumeix que totes les dades de tancaments ja venen en AAAA-MM-DD.
- * Només normalitzem la llista afegint 'normalizedDate' per mantenir la lògica de FullCalendar
- * Neteja el format AAAA-MM-DD (la teva BD) al format AAAA-MM-DD (que necessita FullCalendar)
+ * Funció Dummy: Assumeix que totes les dades de tancaments ja venen en AAAA-MM-DD (format de BD).
+ * Només normalitzem la llista afegint 'normalizedDate' que és la propietat que FullCalendar utilitza
+ * per la comparació ràpida.
  * @param {Array<Object>} gymClosures Llista de tancaments generals (id, date: AAAA-MM-DD, reason).
  * @returns {Array<Object>} Llista de tancaments amb la data en format AAAA-MM-DD.
  */
@@ -54,11 +54,12 @@ export const normalizeGymClosures = (gymClosures) => {
     if (!gymClosures || !Array.isArray(gymClosures)) {
         return [];
     }
-    // Si la data ja està en AAAA-MM-DD a la BD (com sembla), només li afegim la propietat de normalització.
-    return gymClosures.map(closure => {
+    
+    // FILTRE CLAU: Ens assegurem que la propietat 'date' existeixi abans de continuar.
+    return gymClosures.filter(closure => closure.date).map(closure => {
         return {
             ...closure,
-            // Utilitzem la data original com a data normalitzada
+            // Aquesta propietat és la que utilitza FullCalendar per comparar amb formatDate(dateNormalized)
             normalizedDate: closure.date, 
         };
     });
