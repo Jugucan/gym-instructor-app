@@ -11,6 +11,8 @@ export const getLocalDateString = (date) => {
     console.error("Invalid date provided to getLocalDateString:", date);
     return "";
   }
+  // Atenció: Aquesta funció genera DD/MM/YYYY. El report MonthlyReport utilitza 'isoDate' amb aquest format.
+  // Tot i que es diu 'isoDate' en el report, el format real és DD/MM/YYYY.
   return date.toLocaleDateString('es-ES', {
     day: '2-digit',
     month: '2-digit',
@@ -37,8 +39,9 @@ export const formatDateDDMMYYYY = (dateValue) => {
     // Handle DD-MM-YYYY format (already in desired format, but validate and return)
     else if (/^\d{2}-\d{2}-\d{4}$/.test(dateValue)) {
       const [day, month, year] = dateValue.split('-');
+      // Importante: Reconstruir la fecha para validar
       dateObj = new Date(`${year}-${month}-${day}T00:00:00`);
-      // If valid, return original format
+      // Si valid, return original format
       if (!isNaN(dateObj.getTime())) {
         return dateValue;
       }
@@ -159,6 +162,50 @@ export const normalizeDateToStartOfDay = (date) => {
   newDate.setHours(0, 0, 0, 0);
   return newDate;
 };
+
+
+// -------------------------------------------------------------
+// NOU: Funcions per al càlcul de report (26 al 25)
+// -------------------------------------------------------------
+
+/**
+ * Calcula les dates d'inici i final del període de report (26 del mes anterior al 25 del mes actual)
+ * basat en el mes/any seleccionat pel report (p.ex., Setembre 2024).
+ * @param {string} reportMonthString - La data del mes de report en format YYYY-MM (ex: "2024-09").
+ * @returns {{startDate: Date, endDate: Date, label: string} | null} - Un objecte amb les dates d'inici i final.
+ */
+export const getReportMonthDates = (reportMonthString) => {
+  if (!reportMonthString || !/^\d{4}-\d{2}$/.test(reportMonthString)) return null;
+
+  const [yearStr, monthStr] = reportMonthString.split('-');
+  const selectedYear = parseInt(yearStr, 10);
+  const selectedMonthIndex = parseInt(monthStr, 10) - 1; // 0-indexed month
+
+  // L'endDate és el dia 25 del mes seleccionat
+  const endDate = normalizeDateToStartOfDay(new Date(selectedYear, selectedMonthIndex, 25));
+
+  // L'startDate és el dia 26 del mes anterior al seleccionat
+  const startDate = normalizeDateToStartOfDay(new Date(selectedYear, selectedMonthIndex - 1, 26));
+
+  // Si l'endDate cau en el passat (p.ex. si el mes seleccionat és gener i restem 1, ens dona desembre de l'any anterior),
+  // JavaScript ho gestiona automàticament. Ex: new Date(2024, 0, 25) és 25/Jan/2024.
+  // new Date(2024, -1, 26) és 26/Dec/2023.
+
+  // Per al label, usem la data de l'startDate per mostrar el mes correcte.
+  const startMonth = startDate.getMonth() + 1;
+  const startYear = startDate.getFullYear();
+
+  const endMonth = endDate.getMonth() + 1;
+  const endYear = endDate.getFullYear();
+
+  const label = `26/${String(startMonth).padStart(2, '0')}/${startYear} - 25/${String(endMonth).padStart(2, '0')}/${endYear}`;
+  
+  return { startDate, endDate, label };
+};
+
+// -------------------------------------------------------------
+// FINAL NOU
+// -------------------------------------------------------------
 
 /**
  * AFEGIT: Calcula l'edat actual basada en una data d'aniversari.
