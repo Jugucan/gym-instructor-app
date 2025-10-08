@@ -44,8 +44,9 @@ export const calculateRecurringSessionMinutes = (dayName, recurringSessions) => 
 };
 
 /**
- * CONVERSIÓ CLAU: Transforma la llista de tancaments generals (DD-MM-YYYY)
- * en un format que el calendari (i altres funcions) puguin utilitzar (AAAA-MM-DD).
+ * CONVERSIÓ CLAU: Transforma la llista de tancaments generals.
+ * Utilitza la data en format DD-MM-YYYY (assumint que així es guarda a Firestore)
+ * i li afegeix la propietat normalizedDate en format AAAA-MM-DD, que és la que utilitza el calendari.
  * @param {Array<Object>} gymClosures Llista de tancaments generals (id, date: DD-MM-YYYY, reason).
  * @returns {Array<Object>} Llista de tancaments amb la data en format AAAA-MM-DD.
  */
@@ -57,16 +58,21 @@ export const normalizeGymClosures = (gymClosures) => {
     return gymClosures.map(closure => {
         if (!closure.date) return closure;
         
-        // El format de la data guardada a Firestore és DD-MM-YYYY
         const parts = closure.date.split('-'); 
         if (parts.length === 3) {
-            const [day, month, year] = parts;
-            // Format que s'utilitza a la lògica de FullCalendar (AAAA-MM-DD)
-            const normalizedDate = `${year}-${month}-${day}`; 
+            let normalizedDate;
+            
+            // Si el primer component té 4 dígits (YYYY), assumim que ja està en format AAAA-MM-DD
+            if (parts[0].length === 4) { 
+                normalizedDate = closure.date;
+            } else { // Assumim DD-MM-YYYY, i el convertim
+                const [day, month, year] = parts;
+                normalizedDate = `${year}-${month}-${day}`; 
+            }
             
             return {
                 ...closure,
-                normalizedDate: normalizedDate, // Aquesta és la nova propietat que utilitzarem
+                normalizedDate: normalizedDate, // Aquesta és la nova propietat AAAA-MM-DD
             };
         }
         return closure;
