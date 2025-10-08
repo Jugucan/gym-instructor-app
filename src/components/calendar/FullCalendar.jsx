@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, setDoc } from 'firebase/firestore';
 import { formatDate, normalizeDateToStartOfDay, getLocalDateString, formatDateDDMMYYYY, getReportMonthDates } from '../../utils/dateHelpers.jsx';
-import { getActiveFixedSchedule, normalizeGymClosures } from '../../utils/scheduleHelpers.jsx'; // <--- CANVI 1: Importem normalizeGymClosures
+import { getActiveFixedSchedule, normalizeGymClosures } from '../../utils/scheduleHelpers.jsx'; // <--- CANVI: Importem normalizeGymClosures
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
 import { SessionModal } from '../common/SessionModal.jsx';
 import { MissedDayModal } from '../common/MissedDayModal.jsx';
@@ -40,7 +40,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 
   const daysOfWeekNames = ['Diumenge', 'Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte'];
 
-  // <--- CANVI 2: Normalitzem les dates de tancament a AAAA-MM-DD (normalizedDate)
+  // CANVI CLAU: Normalitzem les dates de tancament a AAAA-MM-DD (normalizedDate)
   const normalizedGymClosures = useMemo(() => normalizeGymClosures(gymClosures), [gymClosures]);
 
   // Helper to get sessions for a specific date
@@ -261,7 +261,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       const currentDate = new Date(d);
       const dateStr = formatDate(currentDate);
       
-      // <--- CANVI 3: Utilitzem normalizedGymClosures i la seva propietat normalizedDate
+      // CANVI CLAU: Utilitzem normalizedGymClosures i la seva propietat normalizedDate (en format AAAA-MM-DD)
       const isGymClosure = normalizedGymClosures.some(gc => gc.normalizedDate === dateStr);
       const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStr));
       const isMissed = missedDays.some(md => formatDate(new Date(md.date)) === dateStr);
@@ -278,7 +278,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
     }
 
     return sessionsByGym;
-  }, [dateRange, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, normalizedGymClosures]); // <--- CANVI 3: Dependència de normalizedGymClosures
+  }, [dateRange, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, normalizedGymClosures]); // <--- CANVI: Dependència de normalizedGymClosures
 
 
   // Resum de dies especials del mes (Usat al resum inferior)
@@ -293,7 +293,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       const dateStrDDMMYYYY = formatDateDDMMYYYY(dateNormalized);
       
       // PRIORITAT 1: Festiu / Tancaments
-      // <--- CANVI 4: Utilitzem normalizedGymClosures i la seva propietat normalizedDate
+      // CANVI CLAU: Utilitzem normalizedGymClosures i la seva propietat normalizedDate
       const closure = normalizedGymClosures.find(gc => gc.normalizedDate === dateStr);
       if (closure) {
         summary.push({
@@ -344,7 +344,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       const dateB = new Date(b.date.split('-').reverse().join('-'));
       return dateA - dateB;
     });
-  }, [calendarDays, normalizedGymClosures, gyms, missedDays]); // <--- CANVI 4: Dependència de normalizedGymClosures
+  }, [calendarDays, normalizedGymClosures, gyms, missedDays]); // <--- CANVI: Dependència de normalizedGymClosures
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-inter">
@@ -407,7 +407,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
             const isToday = dateStr === formatDate(todayNormalized);
             
             // PRIORITAT: 1. Festiu/Tancament, 2. Vacances Gimnàs, 3. No Assistit
-            // <--- CANVI 5: Utilitzem normalizedDate per a la comparació
+            // CANVI CLAU: Utilitzem normalizedDate (en format AAAA-MM-DD) per a la comparació
             const isGymClosure = normalizedGymClosures.some(gc => gc.normalizedDate === dateStr);
             const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStr));
             const currentMissedDayEntry = missedDays.find(md => formatDate(new Date(md.date)) === dateStr);
@@ -491,8 +491,6 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
             );
           })}
         </div>
-        
-        {/* ... (Resum de sessions per centre) ... */}
         
         {/* Resum de sessions per centre (Usa la lògica 26-25) */}
         <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
