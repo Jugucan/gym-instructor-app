@@ -1,36 +1,89 @@
-import React, { useState, useEffect } from 'react';
-import { getLocalDateString, formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx';
+import React, { useState, useEffect, useMemo } from 'react';
+import { getLocalDateString, formatDateDDMMYYYY, formatDate, getReportMonthDates, normalizeDateToStartOfDay } from '../../utils/dateHelpers.jsx';
 import { getActiveFixedSchedule, calculateRecurringSessionMinutes } from '../../utils/scheduleHelpers.jsx';
 
 const MonthlyReport = ({ programs, gyms, fixedSchedules, recurringSessions, scheduleOverrides, missedDays }) => {
-  const [reportMonth, setReportMonth] = useState(getLocalDateString(new Date()).substring(0, 7)); // YYYY-MM
+  // ReportMonth té el format YYYY-MM per al mes *final* del període (p.ex. '2024-09' per 26/08 a 25/09)
+  const [reportMonth, setReportMonth] = useState(formatDate(new Date()).substring(0, 7)); // YYYY-MM
+
   const [reportData, setReportData] = useState([]);
   const [totalWorkingMinutes, setTotalWorkingMinutes] = useState(0);
   const [totalVacationDaysTaken, setTotalVacationDaysTaken] = useState(0);
+  const [sessionsByGym, setSessionsByGym] = useState({});
+
+  // Calcula el rang de dates basat en el mes seleccionat
+  const dateRange = useMemo(() => getReportMonthDates(reportMonth), [reportMonth]);
 
   useEffect(() => {
     generateReport();
-  }, [reportMonth, programs, gyms, fixedSchedules, recurringSessions, scheduleOverrides, missedDays]);
+  }, [reportMonth, programs, gyms, fixedSchedules, recurringSessions, scheduleOverrides, missedDays, dateRange]);
+
+  // Helper per obtenir sessions per a una data
+  const getSessionsForDate = (fullDate) => {
+    const dateNormalized = normalizeDateToStartOfDay(fullDate);
+    const dateStr = formatDate(dateNormalized);
+    const dayName = fullDate.toLocaleDateString('ca-ES', { weekday: 'long' });
+
+    const override = scheduleOverrides.find(so => so.date === dateStr);
+    if (override) {
+      return override.sessions;
+    } else {
+      const activeFixedSchedule = getActiveFixedSchedule(dateNormalized, fixedSchedules);
+      const fixedDaySessions = activeFixedSchedule[dayName] || [];
+
+      const recurringSessionsForDay = recurringSessions.filter(rec => {
+        const recStartDateNormalized = normalizeDateToStartOfDay(new Date(rec.startDate));
+        const recEndDateNormalized = rec.endDate ? normalizeDateToStartOfDay(new Date(rec.endDate)) : null;
+        return rec.daysOfWeek.includes(dayName) &&
+             dateNormalized.getTime() >= recStartDateNormalized.getTime() &&
+             (!recEndDateNormalized || dateNormalized.getTime() <= recEndDateNormalized.getTime());
+      });
+      
+      // Combinar i eliminar duplicats de les sessions fixes i recurrents
+      const combinedSessions = [...fixedDaySessions, ...recurringSessionsForDay];
+      const uniqueSessions = [];
+      const seen = new Set();
+      combinedSessions.forEach(session => {
+        const key = `${session.programId}-${session.time}-${session.gymId}`;
+        if (!seen.has(key)) {
+          uniqueSessions.push(session);
+          seen.add(key);
+        }
+      });
+      return uniqueSessions;
+    }
+  };
 
   const generateReport = () => {
-    const [yearStr, monthStr] = reportMonth.split('-');
-    const year = parseInt(yearStr);
-    const month = parseInt(monthStr) - 1;
+    if (!dateRange) return;
 
-    const numDays = new Date(year, month + 1, 0).getDate();
-    let currentMonthData = [];
+    let currentReportData = [];
     let calculatedTotalMinutes = 0;
     let calculatedTotalVacationDays = 0;
+    let calculatedSessionsByGym = {};
 
-    for (let day = 1; day <= numDays; day++) {
-      const fullDate = new Date(year, month, day);
-      const isoDate = getLocalDateString(fullDate);
+    // Inicialitzar el comptador de sessions per gimnàs
+    gyms.forEach(gym => {
+      calculatedSessionsByGym[gym.id] = { name: gym.name, count: 0 };
+    });
+
+    // Clonar la data d'inici per iterar
+    const currentDate = dateRange.startDate;
+    // Afegir 1 dia a la data final per incloure-la al loop (25 al 25)
+    const endDatePlusOne = new Date(dateRange.endDate.getTime());
+    endDatePlusOne.setDate(endDatePlusOne.getDate() + 1);
+
+    // Iterar sobre el rang de dates (del 26 del mes anterior al 25 del mes actual)
+    for (let d = new Date(currentDate); d < endDatePlusOne; d.setDate(d.getDate() + 1)) {
+      const fullDate = new Date(d); // Clonar per evitar mutar l'objecte del loop
+      const isoDate = formatDate(fullDate); // YYYY-MM-DD
       const dayName = fullDate.toLocaleDateString('ca-ES', { weekday: 'long' });
 
       const isWeekend = fullDate.getDay() === 0 || fullDate.getDay() === 6;
 
-      const override = scheduleOverrides.find(so => so.date === isoDate);
-      const missed = missedDays.find(md => md.date === isoDate);
+      const sessionsToday = getSessionsForDate(fullDate);
+      const missed = missedDays.find(md => formatDate(new Date(md.date)) === isoDate);
+      const isOverride = scheduleOverrides.some(so => formatDate(new Date(so.date)) === isoDate);
 
       let dayType = 'Normal';
       let programInfo = 'No programat';
@@ -40,45 +93,35 @@ const MonthlyReport = ({ programs, gyms, fixedSchedules, recurringSessions, sche
       if (missed) {
         dayType = 'DIA LLIURE';
         calculatedTotalVacationDays++;
-      } else if (override) {
-        dayType = 'Canvi Horari';
-        programInfo = override.sessions.map(s => {
+        programInfo = `No assistit - ${gyms.find(g => g.id === missed.assignedGymId)?.name || 'Tots'}`;
+        notes = missed.notes || '';
+      } else if (sessionsToday.length > 0) {
+        dayType = isOverride ? 'Canvi Horari' : 'Programat';
+        
+        programInfo = sessionsToday.map(s => {
           const program = programs.find(p => p.id === s.programId);
           const gym = gyms.find(g => g.id === s.gymId);
+          
+          // Comptar sessions per gimnàs
+          if (s.gymId && calculatedSessionsByGym[s.gymId]) {
+            calculatedSessionsByGym[s.gymId].count++;
+          }
+          
           return `${program?.shortName || 'N/A'} (${gym?.name || 'N/A'})`;
         }).join(', ');
-        minutes = override.sessions.length * 60;
-        notes = override.notes || '';
+        
+        minutes = sessionsToday.length * 60; // Assumint 60 minuts per sessió
         calculatedTotalMinutes += minutes;
-      } else {
-        const activeFixedSchedule = getActiveFixedSchedule(fullDate, fixedSchedules);
-        const recurringSessionsToday = recurringSessions.filter(session => session.daysOfWeek.includes(dayName));
+        notes = isOverride ? scheduleOverrides.find(so => formatDate(new Date(so.date)) === isoDate)?.notes || '' : '';
 
-        if (activeFixedSchedule[dayName] && activeFixedSchedule[dayName].length > 0) {
-          programInfo = activeFixedSchedule[dayName].map(s => {
-            const program = programs.find(p => p.id === s.programId);
-            const gym = gyms.find(g => g.id === s.gymId);
-            return `${program?.shortName || 'N/A'} (${gym?.name || 'N/A'})`;
-          }).join(', ');
-          minutes = activeFixedSchedule[dayName].length * 60;
-          calculatedTotalMinutes += minutes;
-        } else if (recurringSessionsToday.length > 0) {
-            programInfo = recurringSessionsToday.map(s => {
-                const program = programs.find(p => p.id === s.programId);
-                const gym = gyms.find(g => g.id === s.gymId);
-                return `${program?.shortName || 'N/A'} (${gym?.name || 'N/A'})`;
-            }).join(', ');
-            minutes = recurringSessionsToday.length * 60;
-            calculatedTotalMinutes += minutes;
-        } else if (isWeekend) {
-            dayType = 'Cap de Setmana';
-            programInfo = 'No laborable';
-        } else {
-            programInfo = 'No programat';
-        }
+      } else if (isWeekend) {
+        dayType = 'Cap de Setmana';
+        programInfo = 'No programat';
+      } else {
+        dayType = 'Feiner sense programa';
       }
 
-      currentMonthData.push({
+      currentReportData.push({
         date: isoDate,
         dayName: dayName,
         dayType: dayType,
@@ -88,17 +131,21 @@ const MonthlyReport = ({ programs, gyms, fixedSchedules, recurringSessions, sche
       });
     }
 
-    setReportData(currentMonthData);
+    setReportData(currentReportData);
     setTotalWorkingMinutes(calculatedTotalMinutes);
     setTotalVacationDaysTaken(calculatedTotalVacationDays);
+    setSessionsByGym(calculatedSessionsByGym);
   };
+
+  // Ajustar el label de l'input al mes final (Setembre per 26/08-25/09)
+  const monthLabel = new Date(dateRange?.endDate || new Date()).toLocaleDateString('ca-ES', { month: 'long', year: 'numeric' });
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-inter">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">Informe Mensual de Classes</h1>
 
       <div className="flex items-center space-x-4 mb-6 bg-white p-4 rounded-lg shadow-md">
-        <label htmlFor="reportMonth" className="text-gray-700 font-semibold">Seleccionar Mes:</label>
+        <label htmlFor="reportMonth" className="text-gray-700 font-semibold">Seleccionar Mes de Report (Mes final del 26-25):</label>
         <input
           type="month"
           id="reportMonth"
@@ -109,20 +156,21 @@ const MonthlyReport = ({ programs, gyms, fixedSchedules, recurringSessions, sche
       </div>
 
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-        <h2 className="text-xl font-semibold text-gray-800 mb-4">Resum del Mes</h2>
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">
+          Resum del Període: <span className="text-blue-600">{dateRange?.label || 'Calculant...'}</span>
+        </h2>
         <p className="text-gray-700 mb-2">Total de minuts de classes impartides: <span className="font-medium text-blue-700">{totalWorkingMinutes} minuts</span></p>
-        <p className="text-gray-700 mb-2">Dies lliures/vacances preses: <span className="font-medium text-red-700">{totalVacationDaysTaken} dies</span></p>
-        {gyms.map(gym => {
-          const takenForGym = missedDays.filter(md => 
-            md.date.startsWith(reportMonth) &&
-            true
-          ).length;
-          return (
-            <p key={gym.id} className="text-gray-700 mb-1 ml-4">
-              Dies de vacances assignats a {gym.name}: <span className="font-medium">{gym.totalVacationDays} dies</span>
-            </p>
-          );
-        })}
+        <p className="text-gray-700 mb-4">Dies lliures/vacances preses: <span className="font-medium text-red-700">{totalVacationDaysTaken} dies</span></p>
+
+        <h3 className="text-lg font-semibold text-gray-800 mb-2">Sessions Impartides per Centre (26-25):</h3>
+        <div className="flex flex-wrap gap-4">
+          {Object.values(sessionsByGym).map((gymData, idx) => (
+            <div key={idx} className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+              <div className="text-sm font-semibold text-gray-700">{gymData.name}</div>
+              <div className="text-xl font-bold text-blue-600">{gymData.count} sessions</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="bg-white p-6 rounded-lg shadow-md">
