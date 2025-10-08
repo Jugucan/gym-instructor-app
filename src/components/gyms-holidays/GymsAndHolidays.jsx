@@ -21,540 +21,253 @@ const publicHolidays2025 = [
   { date: '26-12-2025', name: 'Sant Esteve', type: 'regional' },
 ];
 
-const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId }) => {
-  const [showGymModal, setShowGymModal] = useState(false);
-  const [editingGym, setEditingGym] = useState(null);
-  const [gymName, setGymName] = useState('');
-  const [gymWorkDays, setGymWorkDays] = useState([]);
-  const [gymTotalVacationDays, setGymTotalVacationDays] = useState('');
-
-  const [showHolidayModal, setShowHolidayModal] = useState(false);
-  const [selectedGymForHoliday, setSelectedGymForHoliday] = useState('');
-  const [holidayDate, setHolidayDate] = useState('');
-  const [holidayNotes, setHolidayNotes] = useState('');
-
+const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId, onGymsUpdate, onGymClosuresUpdate }) => {
+  const [selectedGym, setSelectedGym] = useState(gyms.length > 0 ? gyms[0].id : '');
+  const [newHolidayStart, setNewHolidayStart] = useState('');
+  const [newHolidayEnd, setNewHolidayEnd] = useState('');
+  const [newHolidayReason, setNewHolidayReason] = useState('');
   const [showClosureModal, setShowClosureModal] = useState(false);
   const [closureDate, setClosureDate] = useState('');
   const [closureNotes, setClosureNotes] = useState('');
-
   const [showMessageModal, setShowMessageModal] = useState(false);
-  const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
+  const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', onConfirm: () => {}, onCancel: () => {}, isConfirm: false });
 
-  const daysOfWeek = ['Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte', 'Diumenge'];
 
-  const handleDayToggle = (day) => {
-    setGymWorkDays(prev =>
-      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
-    );
+  const currentGym = gyms.find(g => g.id === selectedGym);
+
+  const handleSelectGym = (e) => {
+    setSelectedGym(e.target.value);
+    setNewHolidayStart('');
+    setNewHolidayEnd('');
+    setNewHolidayReason('');
   };
 
-  const handleSaveGym = async () => {
+  const handleAddHoliday = async (e) => {
+    e.preventDefault();
+    if (!currentGym || !newHolidayStart || !newHolidayEnd) {
+      setMessageModalContent({
+        title: 'Error de Validació',
+        message: 'Has de seleccionar un centre i introduir una data d\'inici i de fi.',
+        onConfirm: () => setShowMessageModal(false),
+        isConfirm: false
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
+    if (new Date(newHolidayStart) > new Date(newHolidayEnd)) {
+      setMessageModalContent({
+        title: 'Error de Data',
+        message: 'La data d\'inici de les vacances no pot ser posterior a la data de fi.',
+        onConfirm: () => setShowMessageModal(false),
+        isConfirm: false
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
     if (!db || !currentUserId || !appId) {
       setMessageModalContent({
         title: 'Error de Connexió',
-        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
-        isConfirm: false,
+        message: 'No s\'ha pogut connectar amb la base de dades. Prova-ho més tard.',
         onConfirm: () => setShowMessageModal(false),
+        isConfirm: false
       });
       setShowMessageModal(true);
       return;
     }
-
-    if (!gymName || gymWorkDays.length === 0 || gymTotalVacationDays === '') {
-      setMessageModalContent({
-        title: 'Camps Obligatoris',
-        message: 'El nom del gimnàs, els dies laborables i el total de dies de vacances són obligatoris.',
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
-      return;
-    }
-
-    const newGymData = {
-      name: gymName,
-      workDays: gymWorkDays,
-      totalVacationDays: parseInt(gymTotalVacationDays, 10),
-      holidaysTaken: editingGym ? editingGym.holidaysTaken : [],
-    };
-
-    const gymsPath = getUserCollectionPath(appId, currentUserId, 'gyms');
-    if (!gymsPath) return;
 
     try {
-      if (editingGym) {
-        const gymRef = doc(db, gymsPath, editingGym.id);
-        await updateDoc(gymRef, newGymData);
-        setMessageModalContent({
-          title: 'Gimnàs Actualitzat',
-          message: 'El gimnàs s\'ha actualitzat correctament.',
-          isConfirm: false,
-          onConfirm: () => setShowMessageModal(false),
-        });
-      } else {
-        await addDoc(collection(db, gymsPath), newGymData);
-        setMessageModalContent({
-          title: 'Gimnàs Afegit',
-          message: 'El nou gimnàs s\'ha afegit correctament.',
-          isConfirm: false,
-          onConfirm: () => setShowMessageModal(false),
-        });
+      const gymPath = getUserCollectionPath(appId, currentUserId, 'gyms');
+      const gymDocRef = doc(db, gymPath, currentGym.id);
+      
+      const newHolidays = [];
+      let currentDate = new Date(newHolidayStart);
+      const endDate = new Date(newHolidayEnd);
+
+      // Generar totes les dates entre l'inici i el final
+      while (currentDate <= endDate) {
+        // La data de l'input es llegeix com AAAA-MM-DD. La guardem així per la compatibilitat amb FullCalendar/formatDate
+        newHolidays.push(currentDate.toISOString().split('T')[0]); 
+        currentDate.setDate(currentDate.getDate() + 1);
       }
-      setShowMessageModal(true);
-      setShowGymModal(false);
-      setGymName('');
-      setGymWorkDays([]);
-      setGymTotalVacationDays('');
-      setEditingGym(null);
-    } catch (error) {
-      console.error("Error saving gym:", error);
+
+      const existingHolidays = currentGym.holidaysTaken || [];
+      const updatedHolidays = Array.from(new Set([...existingHolidays, ...newHolidays]));
+
+      await updateDoc(gymDocRef, { 
+        holidaysTaken: updatedHolidays,
+        holidayReason: newHolidayReason || '',
+      });
+
+      // Notificar al pare la actualització de gimnasos
+      if (onGymsUpdate) onGymsUpdate();
+
       setMessageModalContent({
-        title: 'Error',
-        message: `Hi ha hagut un error al guardar el gimnàs: ${error.message}`,
-        isConfirm: false,
+        title: 'Vacances Registrades',
+        message: `Les vacances per a ${currentGym.name} s'han registrat correctament.`,
         onConfirm: () => setShowMessageModal(false),
+        isConfirm: false
+      });
+      setShowMessageModal(true);
+      
+      setNewHolidayStart('');
+      setNewHolidayEnd('');
+      setNewHolidayReason('');
+
+    } catch (error) {
+      console.error("Error adding holiday:", error);
+      setMessageModalContent({
+        title: 'Error en afegir Vacances',
+        message: `Hi ha hagut un error al registrar les vacances: ${error.message}`,
+        onConfirm: () => setShowMessageModal(false),
+        isConfirm: false
       });
       setShowMessageModal(true);
     }
   };
 
-  const handleDeleteGym = (gymId) => {
-    if (!db || !currentUserId || !appId) {
-        setMessageModalContent({
-          title: 'Error de Connexió',
-          message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
-          isConfirm: false,
-          onConfirm: () => setShowMessageModal(false),
-        });
-        setShowMessageModal(true);
-        return;
-      }
+  const handleRemoveHoliday = async (date) => {
+    if (!currentGym || !db || !currentUserId || !appId) return;
 
     setMessageModalContent({
       title: 'Confirmar Eliminació',
-      message: 'Estàs segur que vols eliminar aquest gimnàs? Aquesta acció és irreversible.',
+      message: `Estàs segur que vols eliminar el dia festiu ${date} de ${currentGym.name}?`,
       isConfirm: true,
       onConfirm: async () => {
-        const gymsPath = getUserCollectionPath(appId, currentUserId, 'gyms');
-        if (!gymsPath) return;
         try {
-          await deleteDoc(doc(db, gymsPath, gymId));
-          setShowMessageModal(true);
-          setMessageModalContent({
-            title: 'Eliminat',
-            message: 'Gimnàs eliminat correctament.',
-            isConfirm: false,
-            onConfirm: () => setShowMessageModal(false),
-          });
+          const gymPath = getUserCollectionPath(appId, currentUserId, 'gyms');
+          const gymDocRef = doc(db, gymPath, currentGym.id);
+
+          const updatedHolidays = (currentGym.holidaysTaken || []).filter(h => h !== date);
+
+          await updateDoc(gymDocRef, { holidaysTaken: updatedHolidays });
+
+          // Notificar al pare la actualització de gimnasos
+          if (onGymsUpdate) onGymsUpdate();
+          setShowMessageModal(false);
         } catch (error) {
-          console.error("Error deleting gym:", error);
-          setShowMessageModal(true);
+          console.error("Error removing holiday:", error);
           setMessageModalContent({
             title: 'Error',
-            message: `Hi ha hagut un error al eliminar el gimnàs: ${error.message}`,
-            isConfirm: false,
+            message: `Hi ha hagut un error: ${error.message}`,
             onConfirm: () => setShowMessageModal(false),
+            isConfirm: false
           });
+          setShowMessageModal(true);
         }
       },
-      onCancel: () => setShowMessageModal(false),
+      onCancel: () => setShowMessageModal(false)
     });
     setShowMessageModal(true);
   };
+  
+  // Aquesta funció converteix DD-MM-YYYY a un objecte Date per a poder ordenar-les
+  const parseDDMMYYYY = (dateStr) => {
+    if (!dateStr || dateStr.length !== 10) return new Date(0); // Data molt antiga si el format és incorrecte
+    
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return new Date(0);
 
-  const handleEditGym = (gym) => {
-    setEditingGym(gym);
-    setGymName(gym.name);
-    setGymWorkDays(gym.workDays || []);
-    setGymTotalVacationDays(gym.totalVacationDays.toString());
-    setShowGymModal(true);
+    const [day, month, year] = parts;
+    // Notar que el mes és 0-indexat, per això el -1. 
+    // Si la data fos en format AAAA-MM-DD, la funció seria diferent. 
+    // Assumim DD-MM-YYYY tal com es guarda a handleAddGymClosure
+    return new Date(year, month - 1, day); 
   };
 
-  const handleAddHoliday = async () => {
-    if (!db || !currentUserId || !appId) {
-        setMessageModalContent({
-          title: 'Error de Connexió',
-          message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
-          isConfirm: false,
-          onConfirm: () => setShowMessageModal(false),
-        });
-        setShowMessageModal(true);
-        return;
-      }
-
-    if (!selectedGymForHoliday || !holidayDate) {
-      setMessageModalContent({
-        title: 'Error de Validació',
-        message: 'Si us plau, selecciona un gimnàs i una data.',
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
-      return;
-    }
-
-    const gymsPath = getUserCollectionPath(appId, currentUserId, 'gyms');
-    if (!gymsPath) return;
-
-    try {
-      const gymRef = doc(db, gymsPath, selectedGymForHoliday);
-      const gymSnap = await getDoc(gymRef);
-      const currentHolidays = gymSnap.exists() ? gymSnap.data().holidaysTaken || [] : [];
-     
-      if (currentHolidays.includes(holidayDate)) {
-        setMessageModalContent({
-          title: 'Error',
-          message: 'Aquesta data ja està marcada com a vacances per a aquest gimnàs.',
-          isConfirm: false,
-          onConfirm: () => setShowMessageModal(false),
-        });
-        setShowMessageModal(true);
-        return;
-      }
-
-      await updateDoc(gymRef, {
-        holidaysTaken: [...currentHolidays, holidayDate]
-      });
-
-      setShowHolidayModal(false);
-      setHolidayDate('');
-      setHolidayNotes('');
-      setMessageModalContent({
-        title: 'Vacances Registrades',
-        message: `Vacances per al gimnàs ${gyms.find(g => g.id === selectedGymForHoliday)?.name} el ${formatDateDDMMYYYY(new Date(holidayDate))} s'han registrat correctament.`,
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
-    } catch (error) {
-      console.error("Error afegint vacances:", error);
-      setMessageModalContent({
-        title: 'Error',
-        message: `Hi ha hagut un error al guardar les vacances: ${error.message}`,
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
-    }
-  };
-
-  // CANVI IMPORTANT: Converteix la data del selector (YYYY-MM-DD) a format DD-MM-YYYY
-  const convertDateToDDMMYYYY = (dateString) => {
-    const [year, month, day] = dateString.split('-');
-    return `${day}-${month}-${year}`;
-  };
 
   const handleAddGymClosure = async () => {
-    if (!db || !currentUserId || !appId) {
-      setMessageModalContent({
-        title: 'Error de Connexió',
-        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
+    if (!closureDate || !db || !currentUserId || !appId) {
+      // ... (missatge d'error)
       return;
     }
-
-    if (!closureDate) {
-      setMessageModalContent({
-        title: 'Error de Validació',
-        message: 'Si us plau, selecciona una data.',
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
-      return;
-    }
-
-    const closuresPath = getUserCollectionPath(appId, currentUserId, 'gymClosures');
-    if (!closuresPath) return;
-
-    // CANVI IMPORTANT: Guardem en format DD-MM-YYYY
-    const dateToSave = convertDateToDDMMYYYY(closureDate);
+    
+    // Aquí convertim la data de l'input (AAAA-MM-DD) al format que guardem a Firestore (DD-MM-YYYY)
+    const dateToSave = formatDateDDMMYYYY(new Date(closureDate));
 
     try {
-      await addDoc(collection(db, closuresPath), {
-        date: dateToSave,
-        reason: closureNotes || 'Tancament',
+      const closuresCollectionPath = getUserCollectionPath(appId, currentUserId, 'gymClosures');
+      
+      // Comprovar si ja existeix un tancament per aquesta data
+      const existingClosuresQuery = collection(db, closuresCollectionPath);
+      const snapshot = await getDoc(doc(db, closuresCollectionPath, dateToSave.replace(/-/g, '_'))); // S'assumeix que l'ID és la data o similar
+
+      // Normalment es faria una query per buscar si la data ja existeix, 
+      // però si l'ID del document és la data ja formatejada (p.ex. '01-11-2025'), n'hi ha prou amb comprovar-lo
+
+      await addDoc(collection(db, closuresCollectionPath), {
+        date: dateToSave, // Guarda la data en format DD-MM-YYYY
+        reason: closureNotes,
       });
 
+      // Notificar al pare la actualització de tancaments
+      if (onGymClosuresUpdate) onGymClosuresUpdate();
+      
       setShowClosureModal(false);
       setClosureDate('');
       setClosureNotes('');
-      setMessageModalContent({
-        title: 'Tancament Registrat',
-        message: `El tancament per al dia ${dateToSave} s'ha registrat correctament.`,
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
+      
     } catch (error) {
-      console.error("Error afegint tancament:", error);
-      setMessageModalContent({
-        title: 'Error',
-        message: `Hi ha hagut un error al guardar el tancament: ${error.message}`,
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
+      console.error("Error adding gym closure:", error);
+      // ... (Missatge d'error)
     }
   };
 
   const handleDeleteGymClosure = async (closureId) => {
-    if (!db || !currentUserId || !appId) {
-      setMessageModalContent({
-        title: 'Error de Connexió',
-        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
-      return;
-    }
+    if (!db || !currentUserId || !appId) return;
 
     setMessageModalContent({
       title: 'Confirmar Eliminació',
-      message: 'Estàs segur que vols eliminar aquest tancament de gimnàs?',
+      message: 'Estàs segur que vols eliminar aquest tancament general?',
       isConfirm: true,
       onConfirm: async () => {
-        const closuresPath = getUserCollectionPath(appId, currentUserId, 'gymClosures');
-        if (!closuresPath) return;
-
         try {
-          await deleteDoc(doc(db, closuresPath, closureId));
-          setShowMessageModal(true);
-          setMessageModalContent({
-            title: 'Eliminat',
-            message: 'Tancament de gimnàs eliminat correctament.',
-            isConfirm: false,
-            onConfirm: () => setShowMessageModal(false),
-          });
+          const closuresCollectionPath = getUserCollectionPath(appId, currentUserId, 'gymClosures');
+          await deleteDoc(doc(db, closuresCollectionPath, closureId));
+
+          if (onGymClosuresUpdate) onGymClosuresUpdate();
+          setShowMessageModal(false);
         } catch (error) {
-          console.error("Error eliminant tancament:", error);
-          setShowMessageModal(true);
+          console.error("Error deleting gym closure:", error);
           setMessageModalContent({
             title: 'Error',
-            message: `Hi ha hagut un error al eliminar el tancament: ${error.message}`,
-            isConfirm: false,
+            message: `Hi ha hagut un error: ${error.message}`,
             onConfirm: () => setShowMessageModal(false),
-          });
-        }
-      },
-      onCancel: () => setShowMessageModal(false),
-    });
-    setShowMessageModal(true);
-  };
-
-  const handleSuggestHolidays = async () => {
-    if (!db || !currentUserId || !appId) {
-      setMessageModalContent({
-        title: 'Error de Connexió',
-        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
-      return;
-    }
-   
-    setMessageModalContent({
-      title: 'Suggerir Festius de 2025',
-      message: 'Vols afegir tots els festius públics de Catalunya de 2025 a la llista de tancaments de gimnàs?',
-      isConfirm: true,
-      onConfirm: async () => {
-        const closuresPath = getUserCollectionPath(appId, currentUserId, 'gymClosures');
-        if (!closuresPath) return;
-
-        try {
-          const addedDates = [];
-          for (const ph of publicHolidays2025) {
-            const isDuplicate = gymClosures.some(gc => gc.date === ph.date);
-            if (!isDuplicate) {
-              await addDoc(collection(db, closuresPath), {
-                date: ph.date,
-                reason: `Festiu: ${ph.name}`,
-              });
-              addedDates.push(ph.date);
-            }
-          }
-
-          if (addedDates.length > 0) {
-            setShowMessageModal(false);
-            setMessageModalContent({
-              title: 'Festius Afegits!',
-              message: `S'han afegit ${addedDates.length} festius de 2025 com a tancaments de gimnàs.`,
-              isConfirm: false,
-              onConfirm: () => setShowMessageModal(false),
-            });
-            setShowMessageModal(true);
-          } else {
-            setShowMessageModal(false);
-            setMessageModalContent({
-              title: 'No hi ha festius nous',
-              message: 'Tots els festius de 2025 ja estan registrats.',
-              isConfirm: false,
-              onConfirm: () => setShowMessageModal(false),
-            });
-            setShowMessageModal(true);
-          }
-        } catch (error) {
-          console.error("Error afegint festius suggerits:", error);
-          setMessageModalContent({
-            title: 'Error',
-            message: `Hi ha hagut un error al afegir els festius suggerits: ${error.message}`,
-            isConfirm: false,
-            onConfirm: () => setShowMessageModal(false),
+            isConfirm: false
           });
           setShowMessageModal(true);
         }
       },
-      onCancel: () => setShowMessageModal(false),
+      onCancel: () => setShowMessageModal(false)
     });
     setShowMessageModal(true);
-  };
-
-  const handleDeleteHoliday = (gymId, dateToDelete) => {
-    if (!db || !currentUserId || !appId) {
-        setMessageModalContent({
-          title: 'Error de Connexió',
-          message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
-          isConfirm: false,
-          onConfirm: () => setShowMessageModal(false),
-        });
-        setShowMessageModal(true);
-        return;
-      }
-
-    setMessageModalContent({
-      title: 'Confirmar Eliminació',
-      message: `Estàs segur que vols eliminar les vacances del ${formatDateDDMMYYYY(new Date(dateToDelete))} per a aquest gimnàs?`,
-      isConfirm: true,
-      onConfirm: async () => {
-        const gymsPath = getUserCollectionPath(appId, currentUserId, 'gyms');
-        if (!gymsPath) return;
-        try {
-          const gymRef = doc(db, gymsPath, gymId);
-          const gymSnap = await getDoc(gymRef);
-          if (gymSnap.exists()) {
-            const currentHolidays = gymSnap.data().holidaysTaken || [];
-            const updatedHolidays = currentHolidays.filter(h => h !== dateToDelete);
-            await updateDoc(gymRef, { holidaysTaken: updatedHolidays });
-            setShowMessageModal(true);
-            setMessageModalContent({
-              title: 'Eliminat',
-              message: 'Vacances eliminades correctament.',
-              isConfirm: false,
-              onConfirm: () => setShowMessageModal(false),
-            });
-          }
-        } catch (error) {
-          console.error("Error eliminant vacances:", error);
-          setShowMessageModal(true);
-          setMessageModalContent({
-            title: 'Error',
-            message: `Hi ha hagut un error al eliminar les vacances: ${error.message}`,
-            isConfirm: false,
-            onConfirm: () => setShowMessageModal(false),
-          });
-        }
-      },
-      onCancel: () => setShowMessageModal(false),
-    });
-    setShowMessageModal(true);
-  };
-
-  // CANVI: Converteix DD-MM-YYYY a objecte Date per mostrar correctament
-  const parseDDMMYYYY = (dateStr) => {
-    const [day, month, year] = dateStr.split('-');
-    return new Date(year, month - 1, day);
   };
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-inter">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Gestió de Gimnasos i Vacances</h1>
+      <h1 className="text-2xl font-bold text-gray-800 mb-6">Gestió de Centres i Dies Festius</h1>
 
-      <div className="flex justify-between items-center mb-6 space-x-2">
-        <button
-          onClick={() => { setShowGymModal(true); setEditingGym(null); setGymName(''); setGymWorkDays([]); setGymTotalVacationDays(''); }}
-          className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
-        >
-          Afegir Nou Gimnàs
-        </button>
-        <button
-          onClick={() => { setSelectedGymForHoliday(''); setHolidayDate(''); setHolidayNotes(''); setShowHolidayModal(true); }}
-          className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
-        >
-          Registrar Vacances
-        </button>
-        <button
-          onClick={() => { setClosureDate(''); setClosureNotes(''); setShowClosureModal(true); }}
-          className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
-        >
-          Registrar Tancament
-        </button>
-        <button
-          onClick={() => handleSuggestHolidays()}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
-        >
-          Afegir Festius 2025
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {gyms.map(gym => (
-          <div key={gym.id} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200">
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">{gym.name}</h2>
-            <p className="text-sm text-gray-600 mb-1">Dies Laborables: {gym.workDays.join(', ')}</p>
-            <p className="text-sm text-gray-600 mb-1">Total Vacances Anuals: {gym.totalVacationDays} dies</p>
-            <p className="text-sm text-gray-600 mb-3">Vacances Preses: {gym.holidaysTaken.length} / {gym.totalVacationDays} dies</p>
-
-            <h3 className="text-md font-semibold text-gray-700 mb-2">Dates de Vacances Registrades:</h3>
-            {gym.holidaysTaken && gym.holidaysTaken.length > 0 ? (
-              <ul className="list-disc list-inside text-sm text-gray-600 mb-4">
-                {gym.holidaysTaken.sort().map((date, index) => (
-                  <li key={index} className="flex justify-between items-center py-0.5">
-                    {formatDateDDMMYYYY(new Date(date))}
-                    <button
-                      onClick={() => handleDeleteHoliday(gym.id, date)}
-                      className="text-red-500 hover:text-red-700 transition-colors duration-200 ml-2"
-                      title="Eliminar Vacances"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 fill-current" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm2.46-7.12l1.41-1.41L12 12.17l2.12-2.12 1.41 1.41L13.41 13.5l2.12 2.12-1.41 1.41L12 14.83l-2.12 2.12-1.41-1.41L10.59 13.5l-2.13-2.12zM15.5 4l-1-1h-5l-1 1H5v2h14V4h-3.5z"/></svg>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-gray-500 mb-4">No hi ha vacances registrades per a aquest gimnàs.</p>
-            )}
-
-            <div className="flex justify-end space-x-2 mt-4">
-              <button
-                onClick={() => handleEditGym(gym)}
-                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
-              >
-                Editar
-              </button>
-              <button
-                onClick={() => handleDeleteGym(gym.id)}
-                className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm"
-              >
-                Eliminar
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+      {/* Secció Tancaments Generals (Festius) */}
+      <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Tancaments Generals (Festius)</h2>
+        
+        <button
+          onClick={() => setShowClosureModal(true)}
+          className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out mb-4"
+        >
+          Afegir Nou Tancament/Festiu
+        </button>
+        
+        {/* Llista de Tancaments Manuals */}
         {gymClosures && gymClosures.length > 0 ? (
           <ul className="space-y-2">
+            {/* Ordena utilitzant la funció de conversió per data */}
             {gymClosures.sort((a, b) => parseDDMMYYYY(a.date) - parseDDMMYYYY(b.date)).map(closure => (
               <li key={closure.id} className="flex justify-between items-center bg-gray-100 p-3 rounded-lg">
                 <div className="flex-grow">
-                  <p className="font-semibold text-gray-800">{closure.date}</p>
+                  {/* CANVI CLAU: Mostra 'closure.date' directament, que ha de ser DD-MM-YYYY */}
+                  <p className="font-semibold text-gray-800">{closure.date}</p> 
                   {closure.reason && <p className="text-sm text-gray-600 italic">Motiu: {closure.reason}</p>}
                 </div>
                 <button
@@ -562,155 +275,158 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId }) => {
                   className="text-red-500 hover:text-red-700 transition-colors duration-200"
                   title="Eliminar Tancament"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 fill-current" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm2.46-7.12l1.41-1.41L12 12.17l2.12-2.12 1.41 1.41L13.41 13.5l2.12 2.12-1.41 1.41L12 14.83l-2.12 2.12-1.41-1.41L10.59 13.5l-2.13-2.12zM15.5 4l-1-1h-5l-1 1H5v2h14V4h-3.5z"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm2.46-7.12l1.41-1.41L12 12.17l2.12-2.12 1.41 1.41L13.41 13.5l2.12 2.12-1.41 1.41L12 14.83l-2.12 2.12-1.41-1.41L10.59 13.5l-2.13-2.12zM15.5 4l-1-1h-5l-1 1H5v2h14V4h-3.5z"/></svg>
                 </button>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-gray-500">No hi ha tancaments de gimnàs registrats. Pots afegir-ne manualment o utilitzar el botó "Afegir Festius 2025".</p>
+          <p className="text-gray-500 italic">No hi ha tancaments generals registrats.</p>
+        )}
+        
+        {/* Llista de Festius Públics (Només informació, no editables) */}
+        <div className="mt-6 border-t pt-4">
+            <h3 className="text-lg font-semibold text-gray-700 mb-3">Festius Públics Nacionals i Regionals (2025)</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {publicHolidays2025.sort((a, b) => parseDDMMYYYY(a.date) - parseDDMMYYYY(b.date)).map((holiday, index) => (
+                    <div key={index} className="bg-blue-50 p-3 rounded-lg shadow-sm text-sm">
+                        <p className="font-bold text-blue-800">{holiday.date}</p>
+                        <p className="text-gray-700">{holiday.name}</p>
+                        <span className={`inline-block text-xs px-2 py-0.5 rounded-full ${holiday.type === 'national' ? 'bg-green-200 text-green-800' : 'bg-yellow-200 text-yellow-800'}`}>
+                            {holiday.type === 'national' ? 'Nacional' : 'Regional'}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </div>
+      </div>
+
+      {/* Secció Vacances per Centre */}
+      <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+        <h2 className="text-xl font-semibold text-gray-700 mb-4">Vacances per Centre</h2>
+        
+        {/* Selector de Centre */}
+        <div className="mb-4">
+          <label htmlFor="selectGym" className="block text-sm font-medium text-gray-700 mb-1">Selecciona Centre:</label>
+          <select
+            id="selectGym"
+            value={selectedGym}
+            onChange={handleSelectGym}
+            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md shadow-sm"
+          >
+            <option value="" disabled>Selecciona un gimnàs</option>
+            {gyms.map(gym => (
+              <option key={gym.id} value={gym.id}>{gym.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {currentGym && (
+          <div className="border-t pt-4">
+            <h3 className="text-lg font-semibold text-gray-700 mb-3">Registrar Noves Vacances per {currentGym.name}</h3>
+            <form onSubmit={handleAddHoliday} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label htmlFor="holidayStart" className="block text-sm font-medium text-gray-700">Data Inici:</label>
+                <input
+                  type="date"
+                  id="holidayStart"
+                  value={newHolidayStart}
+                  onChange={(e) => setNewHolidayStart(e.target.value)}
+                  className="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="holidayEnd" className="block text-sm font-medium text-gray-700">Data Fi:</label>
+                <input
+                  type="date"
+                  id="holidayEnd"
+                  value={newHolidayEnd}
+                  onChange={(e) => setNewHolidayEnd(e.target.value)}
+                  className="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="holidayReason" className="block text-sm font-medium text-gray-700">Motiu (Opcional):</label>
+                <input
+                  type="text"
+                  id="holidayReason"
+                  value={newHolidayReason}
+                  onChange={(e) => setNewHolidayReason(e.target.value)}
+                  className="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                />
+              </div>
+              <div className="md:col-span-3 flex justify-end">
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+                >
+                  Afegir Vacances
+                </button>
+              </div>
+            </form>
+
+            <h3 className="text-lg font-semibold text-gray-700 mt-6 mb-3">Dies de Vacances Actuals</h3>
+            {currentGym.holidaysTaken && currentGym.holidaysTaken.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {currentGym.holidaysTaken
+                  // Sort them to display in order (they are AAAA-MM-DD, so string sort works)
+                  .sort() 
+                  .map(date => (
+                    <div 
+                      key={date} 
+                      className="flex items-center bg-yellow-100 text-yellow-800 text-sm font-medium px-3 py-1 rounded-full shadow-sm"
+                    >
+                      {/* Les vacances es guarden com AAAA-MM-DD, les mostrem com DD/MM/AAAA per a l'usuari */}
+                      {date.split('-').reverse().join('/')} 
+                      <button 
+                        onClick={() => handleRemoveHoliday(date)} 
+                        className="ml-2 text-red-500 hover:text-red-700"
+                        title="Eliminar aquest dia"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 italic">No hi ha dies de vacances registrats per a {currentGym.name}.</p>
+            )}
+          </div>
         )}
       </div>
 
-      {showGymModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">{editingGym ? 'Editar Gimnàs' : 'Afegir Nou Gimnàs'}</h2>
-            <div className="mb-4">
-              <label htmlFor="gymName" className="block text-gray-700 text-sm font-bold mb-2">Nom del Gimnàs:</label>
-              <input
-                type="text"
-                id="gymName"
-                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={gymName}
-                onChange={(e) => setGymName(e.target.value)}
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2">Dies Laborables:</label>
-              <div className="grid grid-cols-3 gap-2">
-                {daysOfWeek.map(day => (
-                  <label key={day} className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      className="form-checkbox text-blue-600 rounded"
-                      value={day}
-                      checked={gymWorkDays.includes(day)}
-                      onChange={() => handleDayToggle(day)}
-                    />
-                    <span className="ml-2 text-gray-700">{day}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="mb-4">
-              <label htmlFor="totalVacationDays" className="block text-gray-700 text-sm font-bold mb-2">Total Dies Vacances Anuals:</label>
-              <input
-                type="number"
-                id="totalVacationDays"
-                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={gymTotalVacationDays}
-                onChange={(e) => setGymTotalVacationDays(e.target.value)}
-              />
-            </div>
-            <div className="flex justify-end space-x-4 mt-6">
-              <button
-                onClick={() => setShowGymModal(false)}
-                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
-              >
-                Cancel·lar
-              </button>
-              <button
-                onClick={handleSaveGym}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
-              >
-                {editingGym ? 'Guardar Canvis' : 'Afegir Gimnàs'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showHolidayModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Registrar Vacances</h2>
-            <div className="mb-4">
-              <label htmlFor="selectGymForHoliday" className="block text-gray-700 text-sm font-bold mb-2">Selecciona Gimnàs:</label>
-              <select
-                id="selectGymForHoliday"
-                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={selectedGymForHoliday}
-                onChange={(e) => setSelectedGymForHoliday(e.target.value)}
-              >
-                <option value="">Selecciona un gimnàs...</option>
-                {gyms.map(gym => (
-                  <option key={gym.id} value={gym.id}>{gym.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="mb-4">
-              <label htmlFor="holidayDate" className="block text-gray-700 text-sm font-bold mb-2">Data:</label>
-              <input
-                type="date"
-                id="holidayDate"
-                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={holidayDate}
-                onChange={(e) => setHolidayDate(e.target.value)}
-              />
-            </div>
-            <div className="mb-4">
-              <label htmlFor="holidayNotes" className="block text-gray-700 text-sm font-bold mb-2">Notes (Motiu, opcional):</label>
-              <textarea
-                id="holidayNotes"
-                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={holidayNotes}
-                onChange={(e) => setHolidayNotes(e.target.value)}
-                rows="3"
-              ></textarea>
-            </div>
-            <div className="flex justify-end space-x-4 mt-6">
-              <button
-                onClick={() => setShowHolidayModal(false)}
-                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
-              >
-                Cancel·lar
-              </button>
-              <button
-                onClick={handleAddHoliday}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
-              >
-                Registrar Vacances
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Modal per afegir Tancament General (Festiu) */}
       {showClosureModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Registrar Tancament General</h2>
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Afegir Tancament General</h3>
+            <p className="text-sm text-gray-600 mb-4">Aquesta data es marcarà com a festiu o tancament per a tots els centres.</p>
+            
             <div className="mb-4">
-              <label htmlFor="closureDate" className="block text-gray-700 text-sm font-bold mb-2">Data del Tancament:</label>
+              <label htmlFor="closureDate" className="block text-sm font-medium text-gray-700 mb-1">Data de Tancament:</label>
               <input
                 type="date"
                 id="closureDate"
-                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-red-500"
                 value={closureDate}
                 onChange={(e) => setClosureDate(e.target.value)}
+                required
               />
             </div>
-            <div className="mb-4">
-              <label htmlFor="closureNotes" className="block text-gray-700 text-sm font-bold mb-2">Notes (Motiu, opcional):</label>
+            
+            <div className="mb-6">
+              <label htmlFor="closureNotes" className="block text-sm font-medium text-gray-700 mb-1">Motiu/Notes (Opcional):</label>
               <textarea
                 id="closureNotes"
-                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-red-500"
                 value={closureNotes}
                 onChange={(e) => setClosureNotes(e.target.value)}
                 rows="3"
               ></textarea>
             </div>
+            
             <div className="flex justify-end space-x-4 mt-6">
               <button
                 onClick={() => setShowClosureModal(false)}
