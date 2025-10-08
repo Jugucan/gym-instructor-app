@@ -7,7 +7,6 @@ import { SessionModal } from '../common/SessionModal.jsx';
 import { MissedDayModal } from '../common/MissedDayModal.jsx';
 import { MessageModal } from '../common/MessageModal.jsx';
 
-// CANVI IMPORTANT: Afegit gymClosures com a propietat obligatòria
 const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, gymClosures = [], db, currentUserId, appId }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showSessionModal, setShowSessionModal] = useState(false);
@@ -261,23 +260,108 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
   };
 
   const currentYear = currentMonth.getFullYear();
-  const daysInMonth = new Date(currentYear, currentMonth.getMonth() + 1, 0).getDate();
-  const firstDayOfMonth = new Date(currentYear, currentMonth.getMonth(), 1).getDay();
+  const monthIndex = currentMonth.getMonth();
+  const daysInMonth = new Date(currentYear, monthIndex + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentYear, monthIndex, 1).getDay();
 
   const calendarDays = useMemo(() => {
     const days = [];
-    // Ajustar l'inici del calendari per a que la setmana comenci en dilluns
     const startOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
     for (let i = 0; i < startOffset; i++) {
       days.push(null);
     }
     for (let i = 1; i <= daysInMonth; i++) {
-      days.push(new Date(currentYear, currentMonth.getMonth(), i));
+      days.push(new Date(currentYear, monthIndex, i));
     }
     return days;
-  }, [currentMonth, daysInMonth, firstDayOfMonth, currentYear]);
+  }, [currentMonth, daysInMonth, firstDayOfMonth, currentYear, monthIndex]);
 
   const todayNormalized = normalizeDateToStartOfDay(new Date());
+
+  // NOVA FUNCIONALITAT: Càlcul de sessions per centre (del 26 al 25)
+  const calculateMonthlySessionsByGym = useMemo(() => {
+    // Determinar el rang del mes: del 26 del mes anterior al 25 del mes actual
+    const startDate = new Date(currentYear, monthIndex - 1, 26);
+    const endDate = new Date(currentYear, monthIndex, 25);
+    
+    const sessionsByGym = {};
+    
+    gyms.forEach(gym => {
+      sessionsByGym[gym.id] = {
+        gymName: gym.name,
+        count: 0
+      };
+    });
+
+    // Iterar per cada dia del rang
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      const currentDate = new Date(d);
+      const sessions = getSessionsForDate(currentDate);
+      
+      sessions.forEach(session => {
+        if (session.gymId && sessionsByGym[session.gymId]) {
+          sessionsByGym[session.gymId].count++;
+        }
+      });
+    }
+
+    return sessionsByGym;
+  }, [currentMonth, gyms, scheduleOverrides, fixedSchedules, recurringSessions]);
+
+  // NOVA FUNCIONALITAT: Resum de dies especials del mes
+  const specialDaysSummary = useMemo(() => {
+    const summary = [];
+    
+    calendarDays.forEach(date => {
+      if (!date) return;
+      
+      const dateNormalized = normalizeDateToStartOfDay(date);
+      const dateStr = formatDate(dateNormalized);
+      const dateStrDDMMYYYY = formatDateDDMMYYYY(dateNormalized);
+      
+      // Comprovar festius/tancaments
+      const closure = gymClosures.find(gc => gc.date === dateStrDDMMYYYY);
+      if (closure) {
+        summary.push({
+          date: dateStrDDMMYYYY,
+          type: 'festiu',
+          description: closure.reason || 'Festiu / Tancament',
+          color: '#DC2626' // vermell fosc
+        });
+      }
+      
+      // Comprovar vacances
+      const vacation = gyms.find(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStr));
+      if (vacation) {
+        summary.push({
+          date: dateStrDDMMYYYY,
+          type: 'vacances',
+          description: `Vacances ${vacation.name}`,
+          color: '#F97316' // taronja
+        });
+      }
+      
+      // Comprovar dies no assistits
+      const missedEntry = missedDays.find(md => md.date === dateStr);
+      if (missedEntry) {
+        const gym = gyms.find(g => g.id === missedEntry.assignedGymId);
+        summary.push({
+          date: dateStrDDMMYYYY,
+          type: 'no_assistit',
+          description: `No assistit${gym ? ` - ${gym.name}` : ''}${missedEntry.notes ? ` - ${missedEntry.notes}` : ''}`,
+          color: '#FBBF24' // groc
+        });
+      }
+    });
+    
+    return summary.sort((a, b) => {
+      const [dayA, monthA, yearA] = a.date.split('-').map(Number);
+      const [dayB, monthB, yearB] = b.date.split('-').map(Number);
+      const dateA = new Date(yearA, monthA - 1, dayA);
+      const dateB = new Date(yearB, monthB - 1, dayB);
+      return dateA - dateB;
+    });
+  }, [calendarDays, gymClosures, gyms, missedDays]);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-inter">
@@ -309,17 +393,14 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
               <span>Avui</span>
             </div>
             <div className="flex items-center gap-2">
-              {/*  */}
               <div className="w-4 h-4 bg-red-600 rounded"></div>
               <span className="text-white bg-red-600 px-1 rounded">Festius/Tancaments</span>
             </div>
             <div className="flex items-center gap-2">
-              {/*  */}
               <div className="w-4 h-4 bg-orange-500 rounded"></div>
               <span className="text-white bg-orange-500 px-1 rounded">Vacances Gimnàs</span>
             </div>
             <div className="flex items-center gap-2">
-              {/*  */}
               <div className="w-4 h-4 bg-yellow-400 border border-yellow-600 rounded"></div>
               <span>No Assistit</span>
             </div>
@@ -337,50 +418,41 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 
             const dateNormalized = normalizeDateToStartOfDay(date);
             const dateStr = formatDate(dateNormalized);
-            const dateStrDDMMYYYY = formatDateDDMMYYYY(dateNormalized); // <--- NOU: Format DD-MM-YYYY
+            const dateStrDDMMYYYY = formatDateDDMMYYYY(dateNormalized);
 
             const sessionsToDisplay = getSessionsForDate(date);
 
-            // Detectar tipus de dia
             const isToday = dateStr === formatDate(todayNormalized);
-            // CANVI IMPORTANT: Utilitzem el format DD-MM-YYYY per comprovar els festius
             const isGymClosure = gymClosures && Array.isArray(gymClosures) && gymClosures.some(gc => gc.date === dateStrDDMMYYYY);
             const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStr));
             const currentMissedDayEntry = missedDays.find(md => md.date === dateStr);
             const isMissed = !!currentMissedDayEntry;
 
-            // Decidir colors (prioritat: festius > vacances > no assistit > avui)
             let dayClasses = 'p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[80px] cursor-pointer border-2 transition-all duration-200 hover:shadow-md';
             let textColor = 'text-gray-800';
             let badgeText = '';
 
             if (isGymClosure) {
-              // VERMELL FOSC per festius/tancaments - MÉS VISUAL
               dayClasses += ' bg-red-600 border-red-800 text-white shadow-lg';
               textColor = 'text-white';
               badgeText = 'FESTIU';
             } else if (isHoliday) {
-              // TARONJA per vacances del gimnàs - MÉS VISUAL
               dayClasses += ' bg-orange-500 border-orange-700 text-white shadow-md';
               textColor = 'text-white';
               badgeText = 'VACANCES';
             } else if (isMissed) {
-              // GROC per no assistit
               dayClasses += ' bg-yellow-400 border-yellow-600';
               badgeText = 'No assistit';
             } else if (isToday) {
-              // BLAU per avui
               dayClasses += ' bg-blue-200 border-blue-500';
             } else {
-              // BLANC/GRIS per dies normals
               dayClasses += ' bg-gray-100 border-gray-300';
             }
 
             return (
-              <div key={dateStr} className={dayClasses}>
+              <div key={dateStr} className={dayClasses} onClick={() => handleDayClick(date)}>
                 <span className={`font-bold text-lg ${textColor}`}>{date.getDate()}</span>
                 
-                {/* Badge amb text més gran i visual */}
                 {badgeText && (
                   <div className={`absolute top-1 left-1 right-1 text-center font-bold text-[9px] py-0.5 px-1 rounded ${
                     isGymClosure ? 'bg-red-800 text-white' :
@@ -391,7 +463,6 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
                   </div>
                 )}
 
-                {/* Sessions (només si no és festiu o vacances) */}
                 {sessionsToDisplay.length > 0 && !isGymClosure && !isHoliday && (
                   <div className="flex flex-wrap justify-center mt-1">
                     {sessionsToDisplay.slice(0, 2).map((session, sIdx) => {
@@ -407,73 +478,83 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
                       ) : null;
                     })}
                     {sessionsToDisplay.length > 2 && (
-                      <span className="text-[9px] font-semibold mx-0.5 px-1 rounded bg-gray-600 text-white shadow-sm">
-                        +{sessionsToDisplay.length - 2}
-                      </span>
+                      <span className="text-[8px] text-gray-500">+{sessionsToDisplay.length - 2}</span>
                     )}
                   </div>
                 )}
-
-                {/* Botons d'acció */}
-                <div className="absolute bottom-1 left-0 right-0 flex justify-center space-x-1">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDayClick(date); }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white p-1 rounded-md text-[8px] leading-none shadow-md"
-                    title="Gestionar sessions"
-                  >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zm-6.721 6.721A2 2 0 014 14.172V16h1.828l6.172-6.172-2.828-2.828L6.865 10.307zM2 18h16v2H2v-2z"></path>
-                    </svg>
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleOpenMissedDayModal(date); }}
-                    className="bg-red-600 hover:bg-red-700 text-white p-1 rounded-md text-[8px] leading-none shadow-md"
-                    title="Marcar com a dia no assistit"
-                  >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path>
-                    </svg>
-                  </button>
-                </div>
               </div>
             );
           })}
         </div>
+
+        {/* NOVA SECCIÓ: Resum de sessions per centre */}
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <h3 className="text-md font-semibold text-blue-900 mb-3">
+            Sessions del Mes (26/{monthIndex === 0 ? 12 : monthIndex}/{monthIndex === 0 ? currentYear - 1 : currentYear} - 25/{monthIndex + 1}/{currentYear})
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {Object.values(calculateMonthlySessionsByGym).map((gymData, idx) => (
+              <div key={idx} className="bg-white p-3 rounded-lg shadow-sm">
+                <div className="text-sm font-semibold text-gray-700">{gymData.gymName}</div>
+                <div className="text-2xl font-bold text-blue-600">{gymData.count}</div>
+                <div className="text-xs text-gray-500">sessions</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* NOVA SECCIÓ: Resum de dies especials */}
+        {specialDaysSummary.length > 0 && (
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <h3 className="text-md font-semibold text-gray-900 mb-3">Dies Especials del Mes</h3>
+            <div className="space-y-2">
+              {specialDaysSummary.map((item, idx) => (
+                <div key={idx} className="flex items-start gap-3 p-2 bg-white rounded border-l-4" style={{ borderLeftColor: item.color }}>
+                  <div className="font-bold text-sm text-gray-700 min-w-[80px]">{item.date}</div>
+                  <div className="text-sm text-gray-600">{item.description}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {showSessionModal && (
         <SessionModal
-          show={showSessionModal}
-          onClose={() => setShowSessionModal(false)}
-          onSave={handleSaveDaySessions}
-          selectedDate={selectedDate}
-          sessionsForDay={sessionsForDay}
+          date={selectedDate}
+          sessions={sessionsForDay}
           programs={programs}
           gyms={gyms}
+          onClose={() => setShowSessionModal(false)}
+          onSave={handleSaveDaySessions}
+          onOpenMissedDayModal={() => {
+            setShowSessionModal(false);
+            handleOpenMissedDayModal(selectedDate);
+          }}
         />
       )}
+
       {showMissedDayModal && (
         <MissedDayModal
-          show={showMissedDayModal}
-          onClose={() => setShowMissedDayModal(false)}
-          onSave={handleAddMissedDay}
-          onUnmark={handleRemoveMissedDay}
           date={missedDayDate}
           gyms={gyms}
-          isAlreadyMissed={isMissedDayForModal}
+          isMissed={isMissedDayForModal}
           missedDayDocId={missedDayDocIdForModal}
-          existingMissedGymId={existingMissedGymId}
-          existingMissedNotes={existingMissedNotes}
+          existingGymId={existingMissedGymId}
+          existingNotes={existingMissedNotes}
+          onClose={() => setShowMissedDayModal(false)}
+          onSave={handleAddMissedDay}
+          onRemove={handleRemoveMissedDay}
         />
       )}
+
       {showMessageModal && (
         <MessageModal
-          show={showMessageModal}
           title={messageModalContent.title}
           message={messageModalContent.message}
+          isConfirm={messageModalContent.isConfirm}
           onConfirm={messageModalContent.onConfirm}
           onCancel={messageModalContent.onCancel}
-          isConfirm={messageModalContent.isConfirm}
         />
       )}
     </div>
