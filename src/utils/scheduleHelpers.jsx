@@ -1,7 +1,7 @@
 // scheduleHelpers.jsx
 // Utility functions for managing schedule logic.
 
-import { normalizeDateToStartOfDay } from './dateHelpers.jsx'; // Corrected to .jsx
+import { normalizeDateToStartOfDay } from './dateHelpers.jsx';
 
 /**
  * Finds the most recent active fixed schedule for a given date.
@@ -41,4 +41,34 @@ export const calculateRecurringSessionMinutes = (dayName, recurringSessions) => 
             // Assuming each session is 60 minutes for simplicity, or we could add a 'duration' field to sessions
             return totalMinutes + 60; // Example: 60 minutes per session
         }, 0);
+};
+
+/**
+ * CONVERSIÓ CLAU: Transforma la llista de tancaments generals (DD-MM-YYYY)
+ * en un format que el calendari (i altres funcions) puguin utilitzar (AAAA-MM-DD).
+ * @param {Array<Object>} gymClosures Llista de tancaments generals (id, date: DD-MM-YYYY, reason).
+ * @returns {Array<Object>} Llista de tancaments amb la data en format AAAA-MM-DD.
+ */
+export const normalizeGymClosures = (gymClosures) => {
+    if (!gymClosures || !Array.isArray(gymClosures)) {
+        return [];
+    }
+
+    return gymClosures.map(closure => {
+        if (!closure.date) return closure;
+        
+        // El format de la data guardada a Firestore és DD-MM-YYYY
+        const parts = closure.date.split('-'); 
+        if (parts.length === 3) {
+            const [day, month, year] = parts;
+            // Format que s'utilitza a la lògica de FullCalendar (AAAA-MM-DD)
+            const normalizedDate = `${year}-${month}-${day}`; 
+            
+            return {
+                ...closure,
+                normalizedDate: normalizedDate, // Aquesta és la nova propietat que utilitzarem
+            };
+        }
+        return closure;
+    });
 };
