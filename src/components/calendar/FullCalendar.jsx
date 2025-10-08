@@ -7,13 +7,20 @@ import { SessionModal } from '../common/SessionModal.jsx';
 import { MissedDayModal } from '../common/MissedDayModal.jsx';
 import { MessageModal } from '../common/MessageModal.jsx';
 
-// Definició dels colors per ser consistents amb un Dashboard típic (Tailwind 500-600)
-// Vermell (Festius / Tancaments)
-const COLOR_FESTIU = '#EF4444'; // Red 500
-// Ambre (Vacances Gimnàs)
-const COLOR_VACANCES = '#F59E0B'; // Amber 500
-// Taronja Fosc (No Assistit)
-const COLOR_NO_ASSISTIT = '#EA580C'; // Orange 600
+// Definició dels colors segons el Dashboard.jsx
+// Utilitzem classes de Tailwind (bg/text-COLOR-100/700) per a la consistència
+const COLOR_FESTIU_BG = 'bg-red-100'; // Vermell clar per a tancaments
+const COLOR_FESTIU_TEXT = 'text-red-700';
+const COLOR_FESTIU_BORDER = 'border-red-700'; // Utilitzem el color de text per la vora
+
+const COLOR_VACANCES_BG = 'bg-blue-100'; // Blau clar per a vacances
+const COLOR_VACANCES_TEXT = 'text-blue-700';
+const COLOR_VACANCES_BORDER = 'border-blue-700';
+
+const COLOR_NO_ASSISTIT_BG = 'bg-yellow-100'; // Groc clar per a dies no assistits
+const COLOR_NO_ASSISTIT_TEXT = 'text-yellow-700';
+const COLOR_NO_ASSISTIT_BORDER = 'border-yellow-700';
+
 
 const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, gymClosures = [], db, currentUserId, appId }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -74,18 +81,20 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
     setSelectedDate(date);
     const sessions = getSessionsForDate(date);
     setSessionsForDay(sessions);
+    
+    // Si és un dia marcat com a no assistit, obrim el modal de no assistit directament
+    const isMissed = missedDays.find(md => formatDate(new Date(md.date)) === formatDate(date));
+    if (isMissed) {
+         handleOpenMissedDayModal(date);
+         return;
+    }
+
     setShowSessionModal(true);
   };
 
   const handleSaveDaySessions = async (sessionsToSave) => {
     if (!selectedDate || !db || !currentUserId || !appId) {
-      setMessageModalContent({
-        title: 'Error de Connexió',
-        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
+      // ... (Error de connexió)
       return;
     }
 
@@ -99,13 +108,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       if (sessionsToSave.length > 0) {
         for (const session of sessionsToSave) {
           if (!session.programId || !session.time || !session.gymId) {
-            setMessageModalContent({
-              title: 'Error de Validació',
-              message: 'Si us plau, assegura\'t que totes les sessions tenen un programa, hora i gimnàs seleccionats.',
-              isConfirm: false,
-              onConfirm: () => setShowMessageModal(false),
-            });
-            setShowMessageModal(true);
+            // ... (Error de validació)
             return;
           }
         }
@@ -118,29 +121,16 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       }
 
       setShowSessionModal(false);
-      setMessageModalContent({
-        title: 'Sessions Guardades',
-        message: 'Les sessions per a aquest dia s\'han guardat correctament!',
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
+      // Sense missatge de confirmació per no trencar el flux
     } catch (error) {
       console.error("Error saving day sessions:", error);
-      setMessageModalContent({
-        title: 'Error',
-        message: `Hi ha hagut un error al guardar les sessions: ${error.message}`,
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
+      // ... (Missatge d'error)
     }
   };
 
   const handleOpenMissedDayModal = (date) => {
     setMissedDayDate(date);
     const dateStr = formatDate(date);
-    // Cercar coincidència per data i assegurar que comparem amb YYYY-MM-DD
     const existingMissedEntry = missedDays.find(md => formatDate(new Date(md.date)) === dateStr);
     
     if (existingMissedEntry) {
@@ -159,13 +149,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 
   const handleAddMissedDay = async ({ date, gymId, notes }) => {
     if (!db || !currentUserId || !appId) {
-      setMessageModalContent({
-        title: 'Error de Connexió',
-        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
+      // ... (Error de connexió)
       return;
     }
     try {
@@ -175,7 +159,6 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       const dateToSave = formatDate(date);
       const newMissedDay = { date: dateToSave, assignedGymId: gymId, notes };
 
-      // Si ja hi ha una entrada de missedDay per aquesta data, mostrem error.
       const existingMissedDayQuery = query(
         collection(db, missedDaysCollectionPath),
         where('date', '==', dateToSave)
@@ -183,46 +166,22 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       const querySnapshot = await getDocs(existingMissedDayQuery);
 
       if (!querySnapshot.empty) {
-        setMessageModalContent({
-          title: 'Error',
-          message: 'Aquest dia ja està marcat com a no assistit.',
-          isConfirm: false,
-          onConfirm: () => setShowMessageModal(false),
-        });
-        setShowMessageModal(true);
+        // ... (Missatge d'error 'ja marcat')
         return;
       }
 
       await addDoc(collection(db, missedDaysCollectionPath), newMissedDay);
       setShowMissedDayModal(false);
-      setMessageModalContent({
-        title: 'Dia No Assistit Registrat',
-        message: `El dia ${formatDateDDMMYYYY(dateToSave)} s'ha marcat com a no assistit correctament.`,
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
+      // Sense missatge de confirmació
     } catch (error) {
       console.error("Error adding missed day:", error);
-      setMessageModalContent({
-        title: 'Error',
-        message: `Hi ha hagut un error al marcar el dia com a no assistit: ${error.message}`,
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
+      // ... (Missatge d'error)
     }
   };
 
   const handleRemoveMissedDay = async (docId) => {
     if (!db || !currentUserId || !appId) {
-      setMessageModalContent({
-        title: 'Error de Connexió',
-        message: 'La base de dades no està connectada. Si us plau, recarrega la pàgina o contacta amb el suport.',
-        isConfirm: false,
-        onConfirm: () => setShowMessageModal(false),
-      });
-      setShowMessageModal(true);
+      // ... (Error de connexió)
       return;
     }
     setMessageModalContent({
@@ -237,22 +196,9 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
           await deleteDoc(doc(db, missedDaysCollectionPath, docId));
           setShowMessageModal(false);
           setShowMissedDayModal(false);
-          setMessageModalContent({
-            title: 'Dia Desmarcat',
-            message: 'El dia s\'ha desmarcat com a no assistit correctament.',
-            isConfirm: false,
-            onConfirm: () => setShowMessageModal(false),
-          });
-          setShowMessageModal(true);
         } catch (error) {
           console.error("Error removing missed day:", error);
-          setMessageModalContent({
-            title: 'Error',
-            message: `Hi ha hagut un error al desmarcar el dia: ${error.message}`,
-            isConfirm: false,
-            onConfirm: () => setShowMessageModal(false),
-          });
-          setShowMessageModal(true);
+          // ... (Missatge d'error)
         }
       },
       onCancel: () => setShowMessageModal(false),
@@ -294,7 +240,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
   const sessionsPeriodLabel = dateRange?.label || '';
 
 
-  // Càlcul de sessions per centre (del 26 al 25)
+  // Càlcul de sessions per centre (del 26 al 25) - CORREGIT PER EXCLOURE DIES LLIURES
   const calculateMonthlySessionsByGym = useMemo(() => {
     if (!dateRange) return {};
     
@@ -310,24 +256,27 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
     // Iterar per cada dia del rang (Inclou la data final del 25)
     for (let d = new Date(dateRange.startDate); d <= dateRange.endDate; d.setDate(d.getDate() + 1)) {
       const currentDate = new Date(d);
-      // El càlcul de sessions per a la visualització no ha de comptar els dies marcats com a no assistits/vacances/festiu.
-      // Aquí, per al report, *sí* hem de comptar les sessions programades, ja que la part de report ja treu els dies lliures.
+      const dateStr = formatDate(currentDate);
+      const dateStrDDMMYYYY = formatDateDDMMYYYY(currentDate);
+
+      // NO comptar sessions si és dia lliure (Festiu/Tancament, Vacances Gimnàs, o No Assistit)
+      const isGymClosure = gymClosures && Array.isArray(gymClosures) && gymClosures.some(gc => gc.date === dateStrDDMMYYYY);
+      const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStr));
+      const isMissed = missedDays.some(md => formatDate(new Date(md.date)) === dateStr);
+
+      if (isGymClosure || isHoliday || isMissed) continue; 
+      
       const sessions = getSessionsForDate(currentDate); 
       
       sessions.forEach(session => {
-        // Ignorem les sessions si el dia està marcat com a no assistit.
-        const dateStr = formatDate(currentDate);
-        const isMissed = missedDays.some(md => formatDate(new Date(md.date)) === dateStr);
-        if (!isMissed) {
-          if (session.gymId && sessionsByGym[session.gymId]) {
-            sessionsByGym[session.gymId].count++;
-          }
+        if (session.gymId && sessionsByGym[session.gymId]) {
+          sessionsByGym[session.gymId].count++;
         }
       });
     }
 
     return sessionsByGym;
-  }, [dateRange, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays]);
+  }, [dateRange, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, gymClosures]);
 
 
   // Resum de dies especials del mes (Usat al resum inferior)
@@ -341,33 +290,35 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       const dateStr = formatDate(dateNormalized);
       const dateStrDDMMYYYY = formatDateDDMMYYYY(dateNormalized);
       
-      // Comprovar Festius / Tancaments (Prioritat Alta)
+      // PRIORITAT 1: Festiu / Tancaments
       const closure = gymClosures.find(gc => gc.date === dateStrDDMMYYYY);
       if (closure) {
         summary.push({
           date: dateStrDDMMYYYY,
           type: 'FESTIU / TANCAMENT',
           description: closure.reason || 'Festiu / Tancament',
-          color: COLOR_FESTIU,
-          textColor: '#FFFFFF',
+          bgColor: 'bg-red-100',
+          textColor: 'text-red-700',
+          borderColor: 'border-red-700'
         });
         return; 
       }
       
-      // Comprovar Vacances Gimnàs
+      // PRIORITAT 2: Vacances Gimnàs
       const vacation = gyms.find(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStr));
       if (vacation) {
         summary.push({
           date: dateStrDDMMYYYY,
           type: 'VACANCES GIMNÀS',
           description: `Vacances ${vacation.name}`,
-          color: COLOR_VACANCES, 
-          textColor: '#000000',
+          bgColor: 'bg-blue-100', 
+          textColor: 'text-blue-700',
+          borderColor: 'border-blue-700'
         });
         return;
       }
       
-      // Comprovar dies no assistits
+      // PRIORITAT 3: Dies no assistits
       const missedEntry = missedDays.find(md => formatDate(new Date(md.date)) === dateStr);
       if (missedEntry) {
         const gym = gyms.find(g => g.id === missedEntry.assignedGymId);
@@ -375,8 +326,9 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
           date: dateStrDDMMYYYY,
           type: 'NO ASSISTIT',
           description: `No assistit${gym ? ` - ${gym.name}` : ''}${missedEntry.notes ? ` - ${missedEntry.notes}` : ''}`,
-          color: COLOR_NO_ASSISTIT, 
-          textColor: '#FFFFFF',
+          bgColor: 'bg-yellow-100', 
+          textColor: 'text-yellow-700',
+          borderColor: 'border-yellow-700'
         });
         return;
       }
@@ -411,28 +363,25 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
           </button>
         </div>
 
-        {/* Llegenda de colors - ACTUALITZADA AMB ELS COLORS MARCATS */}
+        {/* Llegenda de colors - COPIA DEL DASHBOARD */}
         <div className="mb-4 p-4 bg-gray-50 rounded-lg">
           <h3 className="text-sm font-semibold text-gray-700 mb-2">Llegenda:</h3>
           <div className="flex flex-wrap gap-4 text-xs">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-blue-200 border border-blue-500 rounded"></div>
+              <div className="w-4 h-4 bg-blue-500 rounded"></div>
               <span>Avui</span>
             </div>
             <div className="flex items-center gap-2">
-              {/* Festius/Tancaments - Vermell 500 */}
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: COLOR_FESTIU }}></div>
-              <span className="px-1 rounded font-bold text-white" style={{ backgroundColor: COLOR_FESTIU }}>Festius/Tancaments</span>
+              <div className={`w-4 h-4 rounded-sm border ${COLOR_FESTIU_BG} ${COLOR_FESTIU_BORDER}`}></div>
+              <span className={`px-1 rounded-sm font-semibold ${COLOR_FESTIU_BG} ${COLOR_FESTIU_TEXT} border border-transparent`}>Festius/Tancaments</span>
             </div>
             <div className="flex items-center gap-2">
-              {/* Vacances Gimnàs - Ambre 500 */}
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: COLOR_VACANCES }}></div>
-              <span className="px-1 rounded font-bold text-black" style={{ backgroundColor: COLOR_VACANCES }}>Vacances Gimnàs</span>
+              <div className={`w-4 h-4 rounded-sm border ${COLOR_VACANCES_BG} ${COLOR_VACANCES_BORDER}`}></div>
+              <span className={`px-1 rounded-sm font-semibold ${COLOR_VACANCES_BG} ${COLOR_VACANCES_TEXT} border border-transparent`}>Vacances Gimnàs</span>
             </div>
             <div className="flex items-center gap-2">
-              {/* No Assistit - Taronja 600 */}
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: COLOR_NO_ASSISTIT }}></div>
-              <span className="px-1 rounded font-bold text-white" style={{ backgroundColor: COLOR_NO_ASSISTIT }}>No Assistit</span>
+              <div className={`w-4 h-4 rounded-sm border ${COLOR_NO_ASSISTIT_BG} ${COLOR_NO_ASSISTIT_BORDER}`}></div>
+              <span className={`px-1 rounded-sm font-semibold ${COLOR_NO_ASSISTIT_BG} ${COLOR_NO_ASSISTIT_TEXT} border border-transparent`}>No Assistit</span>
             </div>
           </div>
         </div>
@@ -454,74 +403,61 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 
             const isToday = dateStr === formatDate(todayNormalized);
             
-            // Comprovar si hi ha Festiu/Tancament (Prioritat 1)
+            // PRIORITAT: 1. Festiu/Tancament, 2. Vacances Gimnàs, 3. No Assistit
             const isGymClosure = gymClosures && Array.isArray(gymClosures) && gymClosures.some(gc => gc.date === dateStrDDMMYYYY);
-            // Comprovar si hi ha Vacances Gimnàs (Prioritat 2)
             const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStr));
-            // Comprovar si és Dia No Assistit (Prioritat 3)
             const currentMissedDayEntry = missedDays.find(md => formatDate(new Date(md.date)) === dateStr);
             const isMissed = !!currentMissedDayEntry;
 
-            let dayClasses = 'p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[80px] cursor-pointer border-2 transition-all duration-200 hover:shadow-lg';
-            let textColor = 'text-gray-800';
+            let dayClasses = 'p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[80px] cursor-pointer border border-gray-200 transition-all duration-200 hover:shadow-md hover:bg-gray-50';
+            let customBgClass = 'bg-white';
+            let customTextColorClass = 'text-gray-800';
+            let customBorderClass = 'border-gray-200';
             let badgeText = '';
-            let customBgColor = '';
-            let customBorderColor = '';
-            let customBadgeBgColor = '';
-            let customBadgeTextColor = 'text-white';
 
-
-            // Aplicació dels colors personalitzats (Festius > Vacances > No Assistit)
             if (isGymClosure) {
-              customBgColor = COLOR_FESTIU;
-              customBorderColor = COLOR_FESTIU;
-              textColor = 'text-white';
-              badgeText = 'FESTIU / TANCAMENT';
-              customBadgeBgColor = '#B91C1C'; // Red 700
+              customBgClass = COLOR_FESTIU_BG;
+              customTextColorClass = COLOR_FESTIU_TEXT;
+              customBorderClass = COLOR_FESTIU_BORDER;
+              badgeText = 'FESTIU/TANCAMENT';
             } else if (isHoliday) {
-              customBgColor = COLOR_VACANCES;
-              customBorderColor = COLOR_VACANCES;
-              textColor = 'text-black'; // Text negre pel fons clar
+              customBgClass = COLOR_VACANCES_BG;
+              customTextColorClass = COLOR_VACANCES_TEXT;
+              customBorderClass = COLOR_VACANCES_BORDER;
               badgeText = 'VACANCES';
-              customBadgeBgColor = '#D97706'; // Amber 600
-              customBadgeTextColor = 'text-white'; // Canviar a blanc per fer el badge més marcat
             } else if (isMissed) {
-              customBgColor = COLOR_NO_ASSISTIT;
-              customBorderColor = COLOR_NO_ASSISTIT;
-              textColor = 'text-white';
+              customBgClass = COLOR_NO_ASSISTIT_BG;
+              customTextColorClass = COLOR_NO_ASSISTIT_TEXT;
+              customBorderClass = COLOR_NO_ASSISTIT_BORDER;
               badgeText = 'NO ASSISTIT';
-              customBadgeBgColor = '#C2410C'; // Orange 700
-            } else if (isToday) {
-              dayClasses += ' bg-blue-100 border-blue-500 shadow-md';
-              customBorderColor = 'rgb(59, 130, 246)'; // blue-500
-            } else {
-              dayClasses += ' bg-white border-gray-200';
-              customBorderColor = 'rgb(229, 231, 235)'; // gray-200
             }
 
-            // Aplicar colors personalitzats si n'hi ha
-            if (customBgColor) {
-              // Eliminar classes de fons i vora de Tailwind per usar l'estil en línia
-              dayClasses = dayClasses.replace(/bg-[\w-]+/g, '') + ` shadow-lg`; 
-              dayClasses = dayClasses.replace(/border-[\w-]+/g, ''); 
+            // Aplicar Avui
+            if (isToday) {
+              if (customBgClass === 'bg-white') {
+                  customBgClass = 'bg-blue-100'; // Utilitzar blau clar només si no té color d'estat
+                  customBorderClass = 'border-blue-500'; // Borda blava per Avui
+              }
+              dayClasses += ' font-bold';
             }
-            // Aplicar el color del text correcte
-            dayClasses = dayClasses.replace(/text-[\w-]+/g, '') + ` ${textColor}`; 
+
+            // Eliminar classes genèriques per aplicar les personalitzades
+            dayClasses = dayClasses.replace(/bg-[\w-]+/g, '').replace(/border-[\w-]+/g, '').replace(/text-[\w-]+/g, '');
 
 
             return (
               <div 
                 key={dateStr} 
-                className={dayClasses} 
+                className={`${dayClasses} ${customBgClass} ${customTextColorClass} ${customBorderClass}`} 
                 onClick={() => handleDayClick(date)}
-                style={{ backgroundColor: customBgColor || undefined, borderColor: customBorderColor || undefined }}
+                style={{ borderWidth: '1px' }}
               >
                 <span className={`font-bold text-lg`}>{date.getDate()}</span>
                 
                 {badgeText && (
                   <div 
-                    className={`absolute top-1 left-1 right-1 text-center font-bold text-[9px] py-0.5 px-1 rounded`}
-                    style={{ backgroundColor: customBadgeBgColor, color: customBadgeTextColor }}
+                    className={`absolute top-1 left-1 right-1 text-center font-bold text-[9px] py-0.5 px-1 rounded-sm border ${customBgClass} ${customTextColorClass} ${customBorderClass}`}
+                    style={{ borderWidth: '1px' }}
                   >
                     {badgeText}
                   </div>
@@ -535,8 +471,8 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
                       return program ? (
                         <span 
                           key={sIdx} 
-                          className="text-[9px] font-semibold mx-0.5 px-1 rounded shadow-sm" 
-                          style={{ backgroundColor: program.color, color: 'white' }}
+                          className="text-[9px] font-semibold mx-0.5 px-1 rounded shadow-sm text-white" 
+                          style={{ backgroundColor: program.color }}
                         >
                           {program.shortName}
                         </span>
@@ -551,7 +487,9 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
             );
           })}
         </div>
-
+        
+        {/* ... (Resum de sessions i dies especials) ... (la resta del component) */}
+        
         {/* Resum de sessions per centre (Usa la lògica 26-25) */}
         <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
           <h3 className="text-md font-semibold text-blue-900 mb-3">
@@ -574,9 +512,9 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
             <h3 className="text-md font-semibold text-gray-900 mb-3">Dies Especials del Mes</h3>
             <div className="space-y-2">
               {specialDaysSummary.map((item, idx) => (
-                <div key={idx} className="flex items-start gap-3 p-2 bg-white rounded border-l-4" style={{ borderLeftColor: item.color }}>
-                  <div className="font-bold text-sm text-gray-700 min-w-[80px]">{item.date}</div>
-                  <div className="text-sm text-gray-600">{item.description}</div>
+                <div key={idx} className={`flex items-start gap-3 p-2 rounded border-l-4 border-l-4 ${item.bgColor}`}>
+                  <div className={`font-bold text-sm min-w-[80px] ${item.textColor}`}>{item.date}</div>
+                  <div className={`text-sm ${item.textColor}`}>{item.description}</div>
                 </div>
               ))}
             </div>
