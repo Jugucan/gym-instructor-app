@@ -1,18 +1,29 @@
 // src/utils/dateHelpers.jsx
 
 /**
- * Formats a Date object into a localized date string (e.g., "DD/MM/YYYY" for ES-ES locale).
- * Handles invalid Date objects gracefully.
- * @param {Date} date - The date object to format.
- * @returns {string} The formatted date string, or an empty string if the date is invalid.
+ * Normalitza una data a l'inici del dia (00:00:00.000) per a comparacions consistents.
+ * @param {Date} date - L'objecte Date.
+ * @returns {Date} L'objecte Date normalitzat.
+ */
+export const normalizeDateToStartOfDay = (date) => {
+  if (!(date instanceof Date) || isNaN(date.getTime())) {
+    return new Date(NaN); // Retorna una data no vàlida si l'entrada no ho és
+  }
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+};
+
+/**
+ * Retorna la data local en format string, p. ex. "DD/MM/YYYY" per a ES-ES.
+ * @param {Date} date - La data a formatejar.
+ * @returns {string} La data formatada.
  */
 export const getLocalDateString = (date) => {
   if (!(date instanceof Date) || isNaN(date.getTime())) {
     console.error("Invalid date provided to getLocalDateString:", date);
     return "";
   }
-  // Atenció: Aquesta funció genera DD/MM/YYYY. El report MonthlyReport utilitza 'isoDate' amb aquest format.
-  // Tot i que es diu 'isoDate' en el report, el format real és DD/MM/YYYY.
   return date.toLocaleDateString('es-ES', {
     day: '2-digit',
     month: '2-digit',
@@ -21,248 +32,201 @@ export const getLocalDateString = (date) => {
 };
 
 /**
- * Formats a YYYY-MM-DD date string, DD-MM-YYYY, or a Date object to a DD-MM-YYYY string.
- * This is the desired format for user-facing display.
- * @param {string|Date} dateValue - The date string or Date object to format.
- * @returns {string} The formatted date string (DD-MM-YYYY), or 'N/A' if the date is invalid.
+ * Formata una data o string en format DD-MM-YYYY.
+ * @param {string|Date} dateValue - La data.
+ * @returns {string} La data formatada (DD-MM-YYYY), o 'N/A'.
  */
 export const formatDateDDMMYYYY = (dateValue) => {
-  let dateObj;
-
+  let date;
   if (dateValue instanceof Date) {
-    dateObj = dateValue;
+    date = dateValue;
   } else if (typeof dateValue === 'string') {
-    // Handle YYYY-MM-DD format
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-      dateObj = new Date(`${dateValue}T00:00:00`);
-    }
-    // Handle DD-MM-YYYY format (already in desired format, but validate and return)
-    else if (/^\d{2}-\d{2}-\d{4}$/.test(dateValue)) {
-      const [day, month, year] = dateValue.split('-');
-      // Importante: Reconstruir la fecha para validar
-      dateObj = new Date(`${year}-${month}-${day}T00:00:00`);
-      // Si valid, return original format
-      if (!isNaN(dateObj.getTime())) {
-        return dateValue;
-      }
-    }
-    // Handle DD/MM/YYYY format
-    else if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) {
-      const [day, month, year] = dateValue.split('/');
-      dateObj = new Date(`${year}-${month}-${day}T00:00:00`);
+    // Si ja és DD-MM-YYYY, la retornem
+    if (/^\d{2}-\d{2}-\d{4}$/.test(dateValue)) return dateValue;
+    
+    // Convertim YYYY-MM-DD a objecte Date amb T00:00:00 per evitar desplaçaments de dia
+    const parts = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (parts) {
+      date = new Date(`${parts[1]}-${parts[2]}-${parts[3]}T00:00:00`);
     } else {
-      dateObj = new Date(dateValue);
+      date = new Date(dateValue);
     }
   } else {
     return 'N/A';
   }
 
-  if (isNaN(dateObj.getTime())) {
+  if (isNaN(date.getTime())) {
     return 'N/A';
   }
 
-  const day = String(dateObj.getDate()).padStart(2, '0');
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const year = dateObj.getFullYear();
-  
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+
   return `${day}-${month}-${year}`;
 };
 
 /**
- * Formats a Date object, YYYY-MM-DD string, or DD-MM-YYYY string into a YYYY-MM-DD string.
- * This format is used for storage and consistent comparison.
- * @param {Date|string} date - The date object or string to format.
- * @returns {string} The formatted date string (YYYY-MM-DD), or an empty string if the date is invalid.
+ * Formata una data a format ISO (YYYY-MM-DD), crucial per a FullCalendar.
+ * @param {Date | string} date - La data a formatejar.
+ * @returns {string} La data en format ISO (YYYY-MM-DD).
  */
 export const formatDate = (date) => {
-  let dateObj;
-  
-  // If it's already a Date object
-  if (date instanceof Date) {
-    dateObj = date;
-  } 
-  // If it's a string, try to parse it
-  else if (typeof date === 'string') {
-    // If it's already in YYYY-MM-DD format, return as is (after validation)
-    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      const testDate = new Date(`${date}T00:00:00`);
-      if (!isNaN(testDate.getTime())) {
-        return date; // Already in correct format and valid
-      }
-    }
-    // If it's in DD-MM-YYYY format, convert it
-    else if (/^\d{2}-\d{2}-\d{4}$/.test(date)) {
-      const [day, month, year] = date.split('-');
-      dateObj = new Date(`${year}-${month}-${day}T00:00:00`);
-    }
-    // If it's in DD/MM/YYYY format, convert it
-    else if (/^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
-      const [day, month, year] = date.split('/');
-      dateObj = new Date(`${year}-${month}-${day}T00:00:00`);
+  if (!date) return '';
+
+  let d = date;
+  if (typeof date === 'string') {
+    // Si és una cadena com "DD-MM-YYYY" la convertim a YYYY-MM-DD
+    const parts = date.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    if (parts) {
+      d = new Date(`${parts[3]}-${parts[2]}-${parts[1]}T00:00:00`);
     } else {
-      dateObj = new Date(date);
+      d = new Date(`${date}T00:00:00`);
     }
-  } 
-  // If it's neither, return empty
-  else {
-    console.error("Invalid date type provided to formatDate:", typeof date, date);
-    return "";
   }
+
+  if (isNaN(d.getTime())) return '';
   
-  // Check if the resulting date is valid
-  if (isNaN(dateObj.getTime())) {
-    console.error("Invalid date provided to formatDate:", date);
-    return "";
-  }
-  
-  const year = dateObj.getFullYear();
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
-  const day = String(dateObj.getDate()).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+
   return `${year}-${month}-${day}`;
 };
 
 /**
- * Parses a date string (YYYY-MM-DD or DD-MM-YYYY) into a Date object.
- * @param {string} dateString - The date string to parse.
- * @returns {Date | null} The Date object, or null if the string is invalid.
+ * Funció per a FullCalendar: Converteix dates simples (YYYY-MM-DD) en esdeveniments.
+ * CLAU PER A FESTIUS I TANCAMENTS.
+ * @param {string[]} dateList - Array de dates en format YYYY-MM-DD.
+ * @param {string} title - Títol de l'esdeveniment.
+ * @param {string} color - Codi hexadecimal del color.
+ * @param {string} type - Tipus (p. ex., 'closure', 'holiday').
+ * @returns {object[]} Array d'objectes d'esdeveniment per a FullCalendar.
  */
-export const parseDateString = (dateString) => {
-  if (!dateString) return null;
-  
-  let year, month, day;
-  
-  // Handle YYYY-MM-DD format
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-    [year, month, day] = dateString.split('-').map(Number);
-  }
-  // Handle DD-MM-YYYY format
-  else if (/^\d{2}-\d{2}-\d{4}$/.test(dateString)) {
-    [day, month, year] = dateString.split('-').map(Number);
-  } else {
-    return null;
-  }
-  
-  // Month is 0-indexed in Date constructor
-  const date = new Date(year, month - 1, day);
-  // Check if the parsed date is valid and corresponds to the input string
-  if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) {
-    return date;
-  }
-  return null;
-};
+export const transformSimpleDatesToEvents = (dateList, title, color, type) => {
+  if (!dateList || dateList.length === 0) return [];
 
-/**
- * Normalizes a Date object to the start of the day (00:00:00.000).
- * This is useful for consistent date comparisons, especially with Firestore timestamps.
- * @param {Date} date - The date object to normalize.
- * @returns {Date} A new Date object normalized to the start of the day.
- */
-export const normalizeDateToStartOfDay = (date) => {
-  const newDate = new Date(date);
-  newDate.setHours(0, 0, 0, 0);
-  return newDate;
+  return dateList.map(dateStr => {
+    // FullCalendar requereix 'start' en format ISO8601.
+    // El 'dateStr' ja hauria de ser YYYY-MM-DD, que és el format ISO per a un dia.
+    const isoDate = formatDate(dateStr); 
+
+    return {
+      title: title,
+      start: isoDate,
+      allDay: true,
+      backgroundColor: color, // El codi de color hexadecimal
+      borderColor: color,
+      textColor: '#FFFFFF',   // Per a un bon contrast
+      extendedProps: {
+        eventType: type, 
+      }
+    };
+  });
 };
 
 
-// -------------------------------------------------------------
-// NOU: Funcions per al càlcul de report (26 al 25)
-// -------------------------------------------------------------
-
 /**
- * Calcula les dates d'inici i final del període de report (26 del mes anterior al 25 del mes actual)
- * basat en el mes/any seleccionat pel report (p.ex., Setembre 2024).
- * @param {string} reportMonthString - La data del mes de report en format YYYY-MM (ex: "2024-09").
- * @returns {{startDate: Date, endDate: Date, label: string} | null} - Un objecte amb les dates d'inici i final.
+ * Funció per a FullCalendar: Converteix rangs de dates en esdeveniments.
+ * CLAU PER A VACANCES.
+ * @param {object[]} rangeList - Array d'objectes amb { startDate, endDate, name }.
+ * @param {string} color - Codi hexadecimal del color.
+ * @returns {object[]} Array d'objectes d'esdeveniment per a FullCalendar.
  */
-export const getReportMonthDates = (reportMonthString) => {
-  if (!reportMonthString || !/^\d{4}-\d{2}$/.test(reportMonthString)) return null;
+export const transformDateRangesToEvents = (rangeList, color) => {
+    if (!rangeList || rangeList.length === 0) return [];
 
-  const [yearStr, monthStr] = reportMonthString.split('-');
-  const selectedYear = parseInt(yearStr, 10);
-  const selectedMonthIndex = parseInt(monthStr, 10) - 1; // 0-indexed month
+    return rangeList.map(range => {
+        // Assegurem que les dates de rang siguin en format ISO8601 (YYYY-MM-DD)
+        const start = formatDate(range.startDate);
+        const end = formatDate(range.endDate);
 
-  // L'endDate és el dia 25 del mes seleccionat
-  const endDate = normalizeDateToStartOfDay(new Date(selectedYear, selectedMonthIndex, 25));
-
-  // L'startDate és el dia 26 del mes anterior al seleccionat
-  const startDate = normalizeDateToStartOfDay(new Date(selectedYear, selectedMonthIndex - 1, 26));
-
-  // Si l'endDate cau en el passat (p.ex. si el mes seleccionat és gener i restem 1, ens dona desembre de l'any anterior),
-  // JavaScript ho gestiona automàticament. Ex: new Date(2024, 0, 25) és 25/Jan/2024.
-  // new Date(2024, -1, 26) és 26/Dec/2023.
-
-  // Per al label, usem la data de l'startDate per mostrar el mes correcte.
-  const startMonth = startDate.getMonth() + 1;
-  const startYear = startDate.getFullYear();
-
-  const endMonth = endDate.getMonth() + 1;
-  const endYear = endDate.getFullYear();
-
-  const label = `26/${String(startMonth).padStart(2, '0')}/${startYear} - 25/${String(endMonth).padStart(2, '0')}/${endYear}`;
-  
-  return { startDate, endDate, label };
+        // Aquesta funció pot ser complexa si la 'endDate' a Firebase és l'últim dia INCLÒS.
+        // FullCalendar vol el dia DESPRÉS. Com que no tenim una llibreria de dates,
+        // confiem en què la teva lògica actual ja ho gestiona.
+        // Si les teves vacances de l'1 al 5 acaben el 6-01 (format FullCalendar), no cal fer res.
+        
+        return {
+            title: `Vacances: ${range.name || 'Gimnàs Tancat'}`,
+            start: start,
+            end: end, // Potser necessita ajust +1 dia si 'endDate' és l'últim dia inclòs.
+            allDay: true,
+            backgroundColor: color,
+            borderColor: color,
+            textColor: '#FFFFFF',
+            extendedProps: {
+                eventType: 'vacation',
+            }
+        };
+    });
 };
 
-// -------------------------------------------------------------
-// FINAL NOU
-// -------------------------------------------------------------
-
-/**
- * AFEGIT: Calcula l'edat actual basada en una data d'aniversari.
- * @param {string|Date} birthDateValue - La data d'aniversari (YYYY-MM-DD string o Date object).
- * @returns {number} L'edat en anys, o null si la data és invàlida.
- */
+// **Deixem la funció per calcular l'edat tal qual (si la fas servir):**
 export const calculateAge = (birthDateValue) => {
-  if (!birthDateValue) return null;
-  
-  let birthDate;
-  
-  if (birthDateValue instanceof Date) {
-    birthDate = birthDateValue;
-  } else if (typeof birthDateValue === 'string') {
-    // Handle YYYY-MM-DD format
-    if (/^\d{4}-\d{2}-\d{2}$/.test(birthDateValue)) {
-      birthDate = new Date(`${birthDateValue}T00:00:00`);
-    }
-    // Handle DD-MM-YYYY format
-    else if (/^\d{2}-\d{2}-\d{4}$/.test(birthDateValue)) {
-      const [day, month, year] = birthDateValue.split('-');
-      birthDate = new Date(`${year}-${month}-${day}T00:00:00`);
+    let birthDate;
+    
+    if (birthDateValue instanceof Date) {
+      birthDate = birthDateValue;
+    } else if (typeof birthDateValue === 'string') {
+      // Handle YYYY-MM-DD format
+      if (/^\d{4}-\d{2}-\d{2}$/.test(birthDateValue)) {
+        birthDate = new Date(`${birthDateValue}T00:00:00`);
+      }
+      // Handle DD-MM-YYYY format
+      else if (/^\d{2}-\d{2}-\d{4}$/.test(birthDateValue)) {
+        const [day, month, year] = birthDateValue.split('-');
+        birthDate = new Date(`${year}-${month}-${day}T00:00:00`);
+      } else {
+        birthDate = new Date(birthDateValue);
+      }
     } else {
-      birthDate = new Date(birthDateValue);
+      return null;
     }
-  } else {
-    return null;
-  }
-  
-  if (isNaN(birthDate.getTime())) {
-    return null;
-  }
-  
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const monthDifference = today.getMonth() - birthDate.getMonth();
-  
-  // Si encara no ha arribat l'aniversari aquest any, restem un any
-  if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  
-  return age;
+    
+    if (isNaN(birthDate.getTime())) {
+      return null;
+    }
+    
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDifference = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age;
+};
+
+// **Deixem la funció per formatar la data d'aniversari tal qual (si la fas servir):**
+export const formatBirthDateWithAge = (birthDateValue) => {
+    const age = calculateAge(birthDateValue);
+    const formattedDate = formatDateDDMMYYYY(birthDateValue);
+    
+    return age !== null ? `${formattedDate} (${age} anys)` : formattedDate;
+};
+
+
+/**
+ * Retorna l'últim dia del mes de la data donada.
+ * @param {Date} date - L'objecte Date.
+ * @returns {Date} L'últim dia del mes.
+ */
+export const getLastDayOfMonth = (date) => {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
 };
 
 /**
- * AFEGIT: Formata una data d'aniversari mostrant la data en format DD-MM-YYYY i l'edat actual.
- * @param {string|Date} birthDateValue - La data d'aniversari.
- * @returns {string} La data formatada amb l'edat (ex: "07-08-1990 (34 anys)").
+ * Retorna un array amb les dates d'inici i final per a un informe mensual.
+ * @param {Date} date - La data dins del mes de l'informe.
+ * @returns {object} Objecte amb les dates d'inici i final normalitzades.
  */
-export const formatBirthdayWithAge = (birthDateValue) => {
-  const formattedDate = formatDateDDMMYYYY(birthDateValue);
-  const age = calculateAge(birthDateValue);
+export const getReportMonthDates = (date) => {
+  const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
+  const lastDay = getLastDayOfMonth(date);
   
-  if (formattedDate === 'N/A' || age === null) {
-    return formattedDate;
-  }
-  
-  return `${formattedDate} (${age} any${age !== 1 ? 's' : ''})`;
+  return {
+    startDate: normalizeDateToStartOfDay(firstDay),
+    endDate: normalizeDateToStartOfDay(lastDay),
+  };
 };
