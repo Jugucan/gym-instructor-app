@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, setDoc } from 'firebase/firestore';
 import { formatDate, normalizeDateToStartOfDay, getLocalDateString, formatDateDDMMYYYY, getReportMonthDates } from '../../utils/dateHelpers.jsx';
-import { getActiveFixedSchedule } from '../../utils/scheduleHelpers.jsx';
+import { getActiveFixedSchedule, normalizeGymClosures } from '../../utils/scheduleHelpers.jsx'; // <--- CANVI 1: Importem normalizeGymClosures
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
 import { SessionModal } from '../common/SessionModal.jsx';
 import { MissedDayModal } from '../common/MissedDayModal.jsx';
@@ -39,6 +39,9 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
   const daysOfWeekNames = ['Diumenge', 'Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte'];
+
+  // <--- CANVI 2: Normalitzem les dates de tancament a AAAA-MM-DD (normalizedDate)
+  const normalizedGymClosures = useMemo(() => normalizeGymClosures(gymClosures), [gymClosures]);
 
   // Helper to get sessions for a specific date
   const getSessionsForDate = (date) => {
@@ -257,10 +260,9 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
     for (let d = new Date(dateRange.startDate); d <= dateRange.endDate; d.setDate(d.getDate() + 1)) {
       const currentDate = new Date(d);
       const dateStr = formatDate(currentDate);
-      const dateStrDDMMYYYY = formatDateDDMMYYYY(currentDate);
-
-      // NO comptar sessions si és dia lliure (Festiu/Tancament, Vacances Gimnàs, o No Assistit)
-      const isGymClosure = gymClosures && Array.isArray(gymClosures) && gymClosures.some(gc => gc.date === dateStrDDMMYYYY);
+      
+      // <--- CANVI 3: Utilitzem normalizedGymClosures i la seva propietat normalizedDate
+      const isGymClosure = normalizedGymClosures.some(gc => gc.normalizedDate === dateStr);
       const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStr));
       const isMissed = missedDays.some(md => formatDate(new Date(md.date)) === dateStr);
 
@@ -276,7 +278,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
     }
 
     return sessionsByGym;
-  }, [dateRange, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, gymClosures]);
+  }, [dateRange, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, normalizedGymClosures]); // <--- CANVI 3: Dependència de normalizedGymClosures
 
 
   // Resum de dies especials del mes (Usat al resum inferior)
@@ -291,10 +293,11 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       const dateStrDDMMYYYY = formatDateDDMMYYYY(dateNormalized);
       
       // PRIORITAT 1: Festiu / Tancaments
-      const closure = gymClosures.find(gc => gc.date === dateStrDDMMYYYY);
+      // <--- CANVI 4: Utilitzem normalizedGymClosures i la seva propietat normalizedDate
+      const closure = normalizedGymClosures.find(gc => gc.normalizedDate === dateStr);
       if (closure) {
         summary.push({
-          date: dateStrDDMMYYYY,
+          date: closure.date, // Usem el format original (DD-MM-YYYY) per a la visualització
           type: 'FESTIU / TANCAMENT',
           description: closure.reason || 'Festiu / Tancament',
           bgColor: 'bg-red-100',
@@ -334,13 +337,14 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
       }
     });
     
-    // Ordenar per data
+    // Ordenar per data (utilitzant el format DD-MM-YYYY de 'date')
     return summary.sort((a, b) => {
+      // Conversió de DD-MM-YYYY a objecte Date per a la comparació
       const dateA = new Date(a.date.split('-').reverse().join('-'));
       const dateB = new Date(b.date.split('-').reverse().join('-'));
       return dateA - dateB;
     });
-  }, [calendarDays, gymClosures, gyms, missedDays]);
+  }, [calendarDays, normalizedGymClosures, gyms, missedDays]); // <--- CANVI 4: Dependència de normalizedGymClosures
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-inter">
@@ -397,14 +401,14 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 
             const dateNormalized = normalizeDateToStartOfDay(date);
             const dateStr = formatDate(dateNormalized);
-            const dateStrDDMMYYYY = formatDateDDMMYYYY(dateNormalized);
-
+            
             const sessionsToDisplay = getSessionsForDate(date);
 
             const isToday = dateStr === formatDate(todayNormalized);
             
             // PRIORITAT: 1. Festiu/Tancament, 2. Vacances Gimnàs, 3. No Assistit
-            const isGymClosure = gymClosures && Array.isArray(gymClosures) && gymClosures.some(gc => gc.date === dateStrDDMMYYYY);
+            // <--- CANVI 5: Utilitzem normalizedDate per a la comparació
+            const isGymClosure = normalizedGymClosures.some(gc => gc.normalizedDate === dateStr);
             const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStr));
             const currentMissedDayEntry = missedDays.find(md => formatDate(new Date(md.date)) === dateStr);
             const isMissed = !!currentMissedDayEntry;
@@ -488,7 +492,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
           })}
         </div>
         
-        {/* ... (Resum de sessions i dies especials) ... (la resta del component) */}
+        {/* ... (Resum de sessions per centre) ... */}
         
         {/* Resum de sessions per centre (Usa la lògica 26-25) */}
         <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
@@ -512,6 +516,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
             <h3 className="text-md font-semibold text-gray-900 mb-3">Dies Especials del Mes</h3>
             <div className="space-y-2">
               {specialDaysSummary.map((item, idx) => (
+                // La lògica de l'ordenació ja utilitza DD-MM-YYYY, aquí només mostrem el que ha passat
                 <div key={idx} className={`flex items-start gap-3 p-2 rounded border-l-4 border-l-4 ${item.bgColor}`}>
                   <div className={`font-bold text-sm min-w-[80px] ${item.textColor}`}>{item.date}</div>
                   <div className={`text-sm ${item.textColor}`}>{item.description}</div>
