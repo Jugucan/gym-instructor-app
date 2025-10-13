@@ -1,13 +1,29 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, setDoc } from 'firebase/firestore';
-import { formatDate, normalizeDateToStartOfDay, getLocalDateString, formatDateDDMMYYYY, getReportMonthDates } from '../../utils/dateHelpers.jsx';
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  query,
+  where,
+  getDocs,
+  setDoc,
+} from 'firebase/firestore';
+import {
+  formatDate,
+  normalizeDateToStartOfDay,
+  getLocalDateString,
+  formatDateDDMMYYYY,
+  getReportMonthDates,
+} from '../../utils/dateHelpers.jsx';
 import { getActiveFixedSchedule } from '../../utils/scheduleHelpers.jsx';
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
 import { SessionModal } from '../common/SessionModal.jsx';
 import { MissedDayModal } from '../common/MissedDayModal.jsx';
 import { MessageModal } from '../common/MessageModal.jsx';
 
-// 🎨 Colors coherents amb el Dashboard
+// 🎨 Colors coherents
 const COLOR_FESTIU_BG = 'bg-red-100';
 const COLOR_FESTIU_TEXT = 'text-red-700';
 const COLOR_FESTIU_BORDER = 'border-red-700';
@@ -20,22 +36,12 @@ const COLOR_NO_ASSISTIT_BG = 'bg-yellow-100';
 const COLOR_NO_ASSISTIT_TEXT = 'text-yellow-700';
 const COLOR_NO_ASSISTIT_BORDER = 'border-yellow-700';
 
-// ✅ Funció millorada per normalitzar tancaments/festius
+// ✅ Funció per normalitzar els tancaments (festes)
 const normalizeClosures = (closures = []) => {
-  return closures.map((gc) => {
-    let normalizedDate;
-    if (typeof gc.date === 'string') {
-      normalizedDate = gc.date.slice(0, 10);
-    } else if (gc.date?.seconds) {
-      // Si és un Timestamp de Firestore
-      normalizedDate = new Date(gc.date.seconds * 1000).toISOString().slice(0, 10);
-    } else if (gc.date instanceof Date) {
-      normalizedDate = gc.date.toISOString().slice(0, 10);
-    } else {
-      normalizedDate = '';
-    }
-    return { ...gc, normalizedDate };
-  });
+  return closures.map((gc) => ({
+    ...gc,
+    normalizedDate: gc.date ? gc.date.slice(0, 10) : '',
+  }));
 };
 
 const FullCalendar = ({
@@ -55,14 +61,12 @@ const FullCalendar = ({
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [sessionsForDay, setSessionsForDay] = useState([]);
-
   const [showMissedDayModal, setShowMissedDayModal] = useState(false);
   const [missedDayDate, setMissedDayDate] = useState(null);
   const [isMissedDayForModal, setIsMissedDayForModal] = useState(false);
   const [missedDayDocIdForModal, setMissedDayDocIdForModal] = useState(null);
   const [existingMissedGymId, setExistingMissedGymId] = useState('');
   const [existingMissedNotes, setExistingMissedNotes] = useState('');
-
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({
     title: '',
@@ -72,10 +76,21 @@ const FullCalendar = ({
     onCancel: () => {},
   });
 
-  const daysOfWeekNames = ['Diumenge', 'Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte'];
+  const daysOfWeekNames = [
+    'Diumenge',
+    'Dilluns',
+    'Dimarts',
+    'Dimecres',
+    'Dijous',
+    'Divendres',
+    'Dissabte',
+  ];
 
-  // 🧩 Normalitzem els tancaments
-  const normalizedGymClosures = useMemo(() => normalizeClosures(gymClosures), [gymClosures]);
+  // ✅ Normalitzem els tancaments
+  const normalizedGymClosures = useMemo(
+    () => normalizeClosures(gymClosures || []),
+    [gymClosures]
+  );
 
   const getSessionsForDate = (date) => {
     const dateNormalized = normalizeDateToStartOfDay(date);
@@ -83,16 +98,24 @@ const FullCalendar = ({
     const dayOfWeek = dateNormalized.getDay();
     const dayName = daysOfWeekNames[dayOfWeek];
 
-    const activeFixedSchedule = getActiveFixedSchedule(dateNormalized, fixedSchedules);
+    const activeFixedSchedule = getActiveFixedSchedule(
+      dateNormalized,
+      fixedSchedules
+    );
     const fixedDaySessions = activeFixedSchedule[dayName] || [];
 
     const recurringSessionsForDay = recurringSessions.filter((rec) => {
-      const recStartDateNormalized = normalizeDateToStartOfDay(new Date(rec.startDate));
-      const recEndDateNormalized = rec.endDate ? normalizeDateToStartOfDay(new Date(rec.endDate)) : null;
+      const recStartDateNormalized = normalizeDateToStartOfDay(
+        new Date(rec.startDate)
+      );
+      const recEndDateNormalized = rec.endDate
+        ? normalizeDateToStartOfDay(new Date(rec.endDate))
+        : null;
       return (
         rec.daysOfWeek.includes(dayName) &&
         dateNormalized.getTime() >= recStartDateNormalized.getTime() &&
-        (!recEndDateNormalized || dateNormalized.getTime() <= recEndDateNormalized.getTime())
+        (!recEndDateNormalized ||
+          dateNormalized.getTime() <= recEndDateNormalized.getTime())
       );
     });
 
@@ -111,7 +134,10 @@ const FullCalendar = ({
       combinedSessions.forEach((session) => {
         const key = `${session.programId}-${session.time}-${session.gymId}`;
         if (!seen.has(key)) {
-          uniqueSessions.push({ ...session, id: session.id || `fixed_rec_${Date.now()}_${Math.random()}` });
+          uniqueSessions.push({
+            ...session,
+            id: session.id || `fixed_rec_${Date.now()}_${Math.random()}`,
+          });
           seen.add(key);
         }
       });
@@ -124,7 +150,9 @@ const FullCalendar = ({
     const sessions = getSessionsForDate(date);
     setSessionsForDay(sessions);
 
-    const isMissed = missedDays.find((md) => formatDate(new Date(md.date)) === formatDate(date));
+    const isMissed = missedDays.find(
+      (md) => formatDate(new Date(md.date)) === formatDate(date)
+    );
     if (isMissed) {
       handleOpenMissedDayModal(date);
       return;
@@ -133,13 +161,15 @@ const FullCalendar = ({
     setShowSessionModal(true);
   };
 
-  // ➕ Funcions addicionals (guardar, esborrar, modal...) es mantenen sense canvis
-  // ----------------------------------------------------------
   const handleSaveDaySessions = async (sessionsToSave) => {
     if (!selectedDate || !db || !currentUserId || !appId) return;
 
     const dateToSave = formatDate(selectedDate);
-    const scheduleOverridesCollectionPath = getUserCollectionPath(appId, currentUserId, 'scheduleOverrides');
+    const scheduleOverridesCollectionPath = getUserCollectionPath(
+      appId,
+      currentUserId,
+      'scheduleOverrides'
+    );
     if (!scheduleOverridesCollectionPath) return;
 
     try {
@@ -148,7 +178,9 @@ const FullCalendar = ({
       if (sessionsToSave.length > 0) {
         await setDoc(overrideDocRef, {
           date: dateToSave,
-          sessions: sessionsToSave.map(({ id, isNew, isOverride, isFixedOrRecurring, ...rest }) => rest),
+          sessions: sessionsToSave.map(
+            ({ id, isNew, isOverride, isFixedOrRecurring, ...rest }) => rest
+          ),
         });
       } else {
         await deleteDoc(overrideDocRef);
@@ -163,7 +195,9 @@ const FullCalendar = ({
   const handleOpenMissedDayModal = (date) => {
     setMissedDayDate(date);
     const dateStr = formatDate(date);
-    const existingMissedEntry = missedDays.find((md) => formatDate(new Date(md.date)) === dateStr);
+    const existingMissedEntry = missedDays.find(
+      (md) => formatDate(new Date(md.date)) === dateStr
+    );
 
     if (existingMissedEntry) {
       setIsMissedDayForModal(true);
@@ -182,13 +216,20 @@ const FullCalendar = ({
   const handleAddMissedDay = async ({ date, gymId, notes }) => {
     if (!db || !currentUserId || !appId) return;
     try {
-      const missedDaysCollectionPath = getUserCollectionPath(appId, currentUserId, 'missedDays');
+      const missedDaysCollectionPath = getUserCollectionPath(
+        appId,
+        currentUserId,
+        'missedDays'
+      );
       if (!missedDaysCollectionPath) return;
 
       const dateToSave = formatDate(date);
       const newMissedDay = { date: dateToSave, assignedGymId: gymId, notes };
 
-      const existingMissedDayQuery = query(collection(db, missedDaysCollectionPath), where('date', '==', dateToSave));
+      const existingMissedDayQuery = query(
+        collection(db, missedDaysCollectionPath),
+        where('date', '==', dateToSave)
+      );
       const querySnapshot = await getDocs(existingMissedDayQuery);
 
       if (!querySnapshot.empty) return;
@@ -208,7 +249,11 @@ const FullCalendar = ({
       isConfirm: true,
       onConfirm: async () => {
         try {
-          const missedDaysCollectionPath = getUserCollectionPath(appId, currentUserId, 'missedDays');
+          const missedDaysCollectionPath = getUserCollectionPath(
+            appId,
+            currentUserId,
+            'missedDays'
+          );
           await deleteDoc(doc(db, missedDaysCollectionPath, docId));
           setShowMessageModal(false);
           setShowMissedDayModal(false);
@@ -221,9 +266,7 @@ const FullCalendar = ({
     setShowMessageModal(true);
   };
 
-  // ----------------------------------------------------------
-
-  // 📅 Construcció del calendari (igual que abans)
+  // 📅 Construcció del calendari
   const currentYear = currentMonth.getFullYear();
   const monthIndex = currentMonth.getMonth();
   const daysInMonth = new Date(currentYear, monthIndex + 1, 0).getDate();
@@ -241,17 +284,9 @@ const FullCalendar = ({
 
   const todayNormalized = normalizeDateToStartOfDay(new Date());
 
-  // ✅ Aquí ve la part important:
-  // Ara els tancaments i festius estan assegurats que tenen un camp normalizedDate (YYYY-MM-DD)
-  // Això permet que es mostrin correctament al calendari.
-  // No canvia la resta de funcionalitats.
-  // ----------------------------------------------------------
-
-  // 🟢 La resta del render és el mateix que ja tenies
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-inter">
       <h2 className="text-2xl font-bold mb-4 text-gray-800">Calendari</h2>
-      {/* Pots mantenir la teva llegenda i taules com abans */}
 
       <div className="grid grid-cols-7 gap-2 text-center text-sm font-medium text-gray-600 mb-2">
         {['Dl', 'Dm', 'Dc', 'Dj', 'Dv', 'Ds', 'Dg'].map((day) => (
@@ -265,10 +300,15 @@ const FullCalendar = ({
 
           const dateStr = formatDate(date);
           const isToday = dateStr === formatDate(todayNormalized);
-
-          const isGymClosure = normalizedGymClosures.some((gc) => gc.normalizedDate === dateStr);
-          const isHoliday = gyms.some((gym) => gym.holidaysTaken?.includes(dateStr));
-          const isMissed = missedDays.some((md) => formatDate(new Date(md.date)) === dateStr);
+          const isGymClosure = normalizedGymClosures.some(
+            (gc) => gc.normalizedDate === dateStr
+          );
+          const isHoliday = gyms.some((gym) =>
+            gym.holidaysTaken?.includes(dateStr)
+          );
+          const isMissed = missedDays.some(
+            (md) => formatDate(new Date(md.date)) === dateStr
+          );
 
           let bgClass = 'bg-white';
           let borderClass = 'border-gray-300';
@@ -279,7 +319,10 @@ const FullCalendar = ({
             bgClass = COLOR_FESTIU_BG;
             borderClass = COLOR_FESTIU_BORDER;
             textClass = COLOR_FESTIU_TEXT;
-            badgeText = 'FESTIU/TANCAMENT';
+            const closure = normalizedGymClosures.find(
+              (gc) => gc.normalizedDate === dateStr
+            );
+            badgeText = closure?.notes || 'FESTIU/TANCAMENT';
           } else if (isHoliday) {
             bgClass = COLOR_VACANCES_BG;
             borderClass = COLOR_VACANCES_BORDER;
@@ -292,9 +335,7 @@ const FullCalendar = ({
             badgeText = 'NO ASSISTIT';
           }
 
-          if (isToday) {
-            borderClass = 'border-blue-500';
-          }
+          if (isToday) borderClass = 'border-blue-500';
 
           return (
             <div
@@ -302,8 +343,14 @@ const FullCalendar = ({
               className={`p-2 rounded-lg flex flex-col items-center justify-center text-xs relative min-h-[80px] cursor-pointer border ${bgClass} ${borderClass}`}
               onClick={() => handleDayClick(date)}
             >
-              <span className={`font-bold ${textClass}`}>{date.getDate()}</span>
-              {badgeText && <span className={`text-[9px] mt-1 font-semibold ${textClass}`}>{badgeText}</span>}
+              <span className={`font-bold ${textClass}`}>
+                {date.getDate()}
+              </span>
+              {badgeText && (
+                <span className={`text-[9px] mt-1 font-semibold ${textClass}`}>
+                  {badgeText}
+                </span>
+              )}
             </div>
           );
         })}
