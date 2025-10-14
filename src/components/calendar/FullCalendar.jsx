@@ -70,6 +70,9 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
   // - Intentem usar la funció importada normalizeGymClosures (si existeix)
   // - Després assegurem que cada element té `normalizedDate` (YYYY-MM-DD)
   const normalizedGymClosures = useMemo(() => {
+    console.log("DEBUG gymClosures:", gymClosures);
+    console.log("DEBUG normalizedGymClosures:", normalizedGymClosures);
+
     try {
       const base = typeof normalizeGymClosures === 'function'
         ? normalizeGymClosures(gymClosures || [])
@@ -610,3 +613,4 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 };
 
 export default FullCalendar;
+
