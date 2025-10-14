@@ -7,7 +7,20 @@ import { formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx';
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
 import { MessageModal } from '../common/MessageModal.jsx';
 
-const Schedule = ({ programs, scheduleOverrides, fixedSchedules, users, gyms, recurringSessions, missedDays, db, currentUserId, appId }) => {
+const Schedule = ({
+  programs,
+  users,
+  gyms,
+  scheduleOverrides,
+  fixedSchedules,
+  recurringSessions,
+  missedDays,
+  gymClosures,   // 🟢 Afegeix aquesta línia
+  db,
+  currentUserId,
+  appId,
+}) => {
+
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
@@ -283,4 +296,5 @@ const Schedule = ({ programs, scheduleOverrides, fixedSchedules, users, gyms, re
 };
 
 export default Schedule;
+
 
