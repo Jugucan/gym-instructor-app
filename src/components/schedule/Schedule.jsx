@@ -149,18 +149,20 @@ const Schedule = ({ programs, scheduleOverrides, fixedSchedules, users, gyms, re
       <h1 className="text-3xl font-bold text-gray-800 mb-6">Calendari de Sessions</h1>
       
       {/* Full Interactive Calendar */}
-      <FullCalendar
-        programs={programs}
-        users={users}
-        gyms={gyms}
-        scheduleOverrides={scheduleOverrides}
-        fixedSchedules={fixedSchedules}
-        recurringSessions={recurringSessions}
-        missedDays={missedDays}
-        db={db}
-        currentUserId={currentUserId}
-        appId={appId}
-      />
+     <FullCalendar
+  programs={programs}
+  users={users}
+  gyms={gyms}
+  scheduleOverrides={scheduleOverrides}
+  fixedSchedules={fixedSchedules}
+  recurringSessions={recurringSessions}
+  missedDays={missedDays}
+  gymClosures={gymClosures}   // 🟢 Afegim aquesta línia!
+  db={db}
+  currentUserId={currentUserId}
+  appId={appId}
+/>
+
 
       {/* Horaris Fixos Actius */}
       <div className="mt-8 bg-white rounded-lg shadow-md p-6 mb-6">
@@ -281,3 +283,4 @@ const Schedule = ({ programs, scheduleOverrides, fixedSchedules, users, gyms, re
 };
 
 export default Schedule;
+
