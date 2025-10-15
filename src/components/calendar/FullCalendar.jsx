@@ -70,19 +70,17 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
   // - Intentem usar la funció importada normalizeGymClosures (si existeix)
   // - Després assegurem que cada element té `normalizedDate` (YYYY-MM-DD)
   const normalizedGymClosures = useMemo(() => {
-    console.log("DEBUG gymClosures:", gymClosures);
-    console.log("DEBUG normalizedGymClosures:", normalizedGymClosures);
+  console.log("DEBUG gymClosures:", gymClosures);
 
-    try {
-      const base = typeof normalizeGymClosures === 'function'
-        ? normalizeGymClosures(gymClosures || [])
-        : (gymClosures || []);
-      return normalizeClosures(base);
-    } catch (e) {
-      // En cas d'error, tornem a fer la normalització simple
-      return normalizeClosures(gymClosures || []);
-    }
-  }, [gymClosures]);
+  try {
+    const base = typeof normalizeGymClosures === 'function'
+      ? normalizeGymClosures(gymClosures || [])
+      : (gymClosures || []);
+    return normalizeClosures(base);
+  } catch (e) {
+    return normalizeClosures(gymClosures || []);
+  }
+}, [gymClosures]);
 
   // Helper to get sessions for a specific date
   const getSessionsForDate = (date) => {
@@ -613,4 +611,5 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 };
 
 export default FullCalendar;
+
 
