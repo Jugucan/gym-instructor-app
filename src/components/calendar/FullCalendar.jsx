@@ -535,21 +535,40 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
           })}
         </div>
         
-        {/* Resum de sessions per centre (Usa la lògica 26-25) */}
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <h3 className="text-md font-semibold text-blue-900 mb-3">
-            Sessions del Mes de Report: <span className="text-blue-600">{sessionsPeriodLabel}</span>
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {Object.values(calculateMonthlySessionsByGym).map((gymData, idx) => (
-              <div key={idx} className="bg-white p-3 rounded-lg shadow-sm">
-                <div className="text-sm font-semibold text-gray-700">{gymData.gymName}</div>
-                <div className="text-2xl font-bold text-blue-600">{gymData.count}</div>
-                <div className="text-xs text-gray-500">sessions</div>
-              </div>
-            ))}
-          </div>
+        {/* 🔹 RESUM MENSUAL PER GIMNÀS - ESTIL NET I CLAR */}
+<div className="mt-10 p-6 bg-white rounded-2xl border border-gray-200 shadow-sm">
+  <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
+    <div>
+      <h3 className="text-lg font-semibold text-gray-900">
+        Sessions per gimnàs — {currentMonth.toLocaleDateString('ca-ES', { month: 'long', year: 'numeric' }).charAt(0).toUpperCase() +
+          currentMonth.toLocaleDateString('ca-ES', { month: 'long', year: 'numeric' }).slice(1)}
+      </h3>
+      <p className="text-sm text-gray-500 mt-1">
+        Període comptabilitzat: <span className="font-medium text-gray-700">
+        del {formatDateDDMMYYYY(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 26))} al {formatDateDDMMYYYY(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 25))}
+        </span>
+      </p>
+    </div>
+  </div>
+
+  {Object.keys(calculateMonthlySessionsByGym).length === 0 ? (
+    <p className="text-gray-500 italic text-sm">Encara no hi ha sessions registrades per aquest període.</p>
+  ) : (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {Object.values(calculateMonthlySessionsByGym).map((gymData, idx) => (
+        <div
+          key={idx}
+          className="flex flex-col items-center justify-center p-4 bg-gray-50 border border-gray-200 rounded-xl hover:shadow transition-shadow duration-300"
+        >
+          <h4 className="text-base font-semibold text-gray-800">{gymData.gymName}</h4>
+          <p className="text-3xl font-bold text-blue-600 mt-1">{gymData.count}</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wide">sessions</p>
         </div>
+      ))}
+    </div>
+  )}
+</div>
+
 
         {/* Resum de dies especials */}
         {specialDaysSummary.length > 0 && (
@@ -611,5 +630,6 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 };
 
 export default FullCalendar;
+
 
 
