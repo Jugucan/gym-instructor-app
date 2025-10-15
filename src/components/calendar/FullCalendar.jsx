@@ -282,42 +282,75 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
   const sessionsPeriodLabel = dateRange?.label || '';
 
 
-  // Càlcul de sessions per centre (del 26 al 25) - CORREGIT PER EXCLOURE DIES LLIURES
-  const calculateMonthlySessionsByGym = useMemo(() => {
-    if (!dateRange) return {};
-    
-    const sessionsByGym = {};
-    
-    gyms.forEach(gym => {
-      sessionsByGym[gym.id] = {
-        gymName: gym.name,
-        count: 0
-      };
+// 🛠️ Debug / Càlcul robust de sessions per gimnàs (26->25) — mostra detall a la consola
+const calculateMonthlySessionsByGym = useMemo(() => {
+  if (!dateRange || !gyms || gyms.length === 0) return {};
+
+  // Període: 26 del mes anterior -> 25 del mes actual
+  const start = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 26);
+  const end = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 25);
+
+  // Inicialitzem comptadors
+  const sessionsByGym = {};
+  gyms.forEach(gym => {
+    sessionsByGym[String(gym.id)] = { gymName: gym.name, count: 0, daily: {} };
+  });
+
+  console.log("DEBUG sessions calc — període:", formatDateDDMMYYYY(start), "→", formatDateDDMMYYYY(end));
+
+  // Recorrem cada dia creant una nova Date per evitar efectes laterals amb setDate
+  for (let d = new Date(start); d <= end; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+    const currentDate = new Date(d);
+    const dateStr = formatDate(normalizeDateToStartOfDay(currentDate));
+
+    // Comprovacions d'exclusió
+    const isGymClosure = normalizedGymClosures.some(gc => gc.normalizedDate === dateStr);
+    const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStr));
+    const isMissed = missedDays.some(md => formatDate(new Date(md.date)) === dateStr);
+
+    // Agafem sessions tal com les calcula la funció existing
+    const sessions = getSessionsForDate(currentDate) || [];
+
+    // Preparem objecte per detall diari
+    const dayDetail = {
+      date: dateStr,
+      excluded: isGymClosure || isHoliday || isMissed,
+      reason: isGymClosure ? 'closure' : isHoliday ? 'holiday' : isMissed ? 'missed' : null,
+      sessionsCount: sessions.length,
+      perGym: {}
+    };
+
+    // Comptem per gimnàs (un mateix session.gymId podria ser number o string)
+    sessions.forEach(sess => {
+      const gid = String(sess.gymId ?? 'unknown');
+      dayDetail.perGym[gid] = (dayDetail.perGym[gid] || 0) + 1;
+
+      // Només incrementem total si el dia NO està exclòs
+      if (!dayDetail.excluded) {
+        if (!sessionsByGym[gid]) {
+          // Si trobem un gymId no esperat, afegim-lo per transparència
+          sessionsByGym[gid] = { gymName: gid, count: 0, daily: {} };
+        }
+        sessionsByGym[gid].count++;
+        sessionsByGym[gid].daily[dateStr] = (sessionsByGym[gid].daily[dateStr] || 0) + 1;
+      }
     });
 
-    // Iterar per cada dia del rang (Inclou la data final del 25)
-    for (let d = new Date(dateRange.startDate); d <= dateRange.endDate; d.setDate(d.getDate() + 1)) {
-      const currentDate = new Date(d);
-      const dateStr = formatDate(currentDate);
-      
-      // Utilitzem normalizedGymClosures i la seva propietat normalizedDate (en format AAAA-MM-DD)
-      const isGymClosure = normalizedGymClosures.some(gc => gc.normalizedDate === dateStr);
-      const isHoliday = gyms.some(gym => gym.holidaysTaken && gym.holidaysTaken.includes(dateStr));
-      const isMissed = missedDays.some(md => formatDate(new Date(md.date)) === dateStr);
-
-      if (isGymClosure || isHoliday || isMissed) continue; 
-      
-      const sessions = getSessionsForDate(currentDate); 
-      
-      sessions.forEach(session => {
-        if (session.gymId && sessionsByGym[session.gymId]) {
-          sessionsByGym[session.gymId].count++;
-        }
-      });
+    // Mostrem al console els detalls del dia (només dies amb sessions o exclosos per ajuda)
+    if (sessions.length > 0 || dayDetail.excluded) {
+      console.log("DEBUG day:", dateStr, "| excluded:", dayDetail.excluded, "| reason:", dayDetail.reason, "| sessions:", sessions.length, "| perGym:", dayDetail.perGym);
     }
+  }
 
-    return sessionsByGym;
-  }, [dateRange, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, normalizedGymClosures]); // <--- Dependència de normalizedGymClosures
+  // Final: mostrar resum per gimnàs per facilitar la comprovació
+  console.log("DEBUG monthly totals per gym:");
+  Object.keys(sessionsByGym).forEach(gid => {
+    console.log(" -", sessionsByGym[gid].gymName, "(", gid, "):", sessionsByGym[gid].count, "sessions");
+  });
+
+  return sessionsByGym;
+}, [currentMonth, gyms, scheduleOverrides, fixedSchedules, recurringSessions, missedDays, normalizedGymClosures]);
+
 
 
   // Resum de dies especials del mes (Usat al resum inferior)
@@ -630,6 +663,7 @@ const FullCalendar = ({ programs, users, gyms, scheduleOverrides, fixedSchedules
 };
 
 export default FullCalendar;
+
 
 
 
