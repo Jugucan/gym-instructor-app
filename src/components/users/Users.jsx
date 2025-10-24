@@ -1,8 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { collection, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { getUserCollectionPath } from '../../utils/firebasePaths.jsx'; // Confirmat: .jsx
-import { formatDate, formatBirthdayWithAge } from '../../utils/dateHelpers.jsx'; // Confirmat: .jsx
-import { MessageModal } from '../common/MessageModal.jsx'; // Confirmat: .jsx
+// 1. IMPORTAR LLIBRERIES D'EXPORTACIÓ
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver'; 
+
+import { getUserCollectionPath } from '../../utils/firebasePaths.jsx'; 
+import { formatDate, formatBirthdayWithAge } from '../../utils/dateHelpers.jsx'; 
+import { MessageModal } from '../common/MessageModal.jsx'; 
 
 const Users = ({ users, gyms, db, currentUserId, appId }) => {
   const [showUserModal, setShowUserModal] = useState(false);
@@ -71,6 +75,42 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
     }
   };
 
+  // 2. NOVA FUNCIÓ D'EXPORTACIÓ A EXCEL
+  const exportToExcel = (data, fileName) => {
+    // 2.1 Mapeig de dades: Preparem l'array d'usuaris amb les columnes que volem a l'Excel
+    const dataForExport = data.map(user => {
+      // Intentem trobar el nom del gimnàs
+      const gymName = gyms.find(g => g.id === user.gymId)?.name || 'N/A';
+      
+      return {
+        'Nom Complet': user.name || 'N/A',
+        'Gimnàs': gymName,
+        'Data Aniversari': user.birthday ? formatDate(user.birthday, 'dd/MM/yyyy') : 'N/A', // Usar la teva funció de format
+        'Edat': user.birthday ? formatBirthdayWithAge(user.birthday).match(/\((\d+)\)/)?.[1] || 'N/A' : 'N/A', // Extreure només l'edat si és possible
+        'Sessions Habituals': user.usualSessions && user.usualSessions.length > 0 ? user.usualSessions.join(', ') : '',
+        'Telèfon': user.phone || '',
+        'Email': user.email || '',
+        'Notes': user.notes || '',
+        'ID (intern)': user.id, // ID intern per si el necessites
+      };
+    });
+
+    // 2.2 Creació del Full de Càlcul
+    const ws = XLSX.utils.json_to_sheet(dataForExport);
+    
+    // 2.3 Creació del Llibre de Treball i escriptura del fitxer
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Usuaris");
+    
+    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const dataBlob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+    
+    // 2.4 Desa el fitxer amb file-saver
+    saveAs(dataBlob, fileName + '.xlsx');
+  };
+  
+  // --- MÈTODES EXISTENTS (handleSaveUser, handleDeleteUser, handleEditUser) ---
+  
   const handleSaveUser = async () => {
     if (!db || !currentUserId || !appId) {
       setMessageModalContent({
@@ -260,13 +300,24 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
           </div>
         </div>
       </div>
-
-      <button
-        onClick={() => { setShowUserModal(true); setEditingUser(null); setUserName(''); setUserBirthday(''); setUserSessions(''); setUserNotes(''); setUserGymId(''); setUserPhone(''); setUserEmail(''); setUserPhotoUrl(''); }}
-        className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out mb-6"
-      >
-        Afegir Nou Usuari
-      </button>
+      
+      {/* 3. BOTONS D'ACCIÓ */}
+      <div className="flex justify-between mb-6">
+        <button
+          onClick={() => { setShowUserModal(true); setEditingUser(null); setUserName(''); setUserBirthday(''); setUserSessions(''); setUserNotes(''); setUserGymId(''); setUserPhone(''); setUserEmail(''); setUserPhotoUrl(''); }}
+          className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+        >
+          Afegir Nou Usuari
+        </button>
+        
+        {/* NOU BOTÓ D'EXPORTAR */}
+        <button
+          onClick={() => exportToExcel(users, 'llista_usuaris')}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out"
+        >
+          Descarregar Usuaris a Excel 📥
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* MODIFICAT: Usar sortedAndFilteredUsers en lloc de sortedUsers */}
