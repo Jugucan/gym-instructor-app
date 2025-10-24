@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver'; 
 
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx'; 
-import { formatDate, formatBirthdayWithAge } from '../../utils/dateHelpers.jsx'; 
+import { formatDate, formatBirthdayWithAge, formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx';
 import { MessageModal } from '../common/MessageModal.jsx'; 
 
 const Users = ({ users, gyms, db, currentUserId, appId }) => {
@@ -512,5 +512,6 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
 };
 
 export default Users;
+
 
 
