@@ -75,17 +75,23 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
     }
   };
 
-  // 2. NOVA FUNCIÓ D'EXPORTACIÓ A EXCEL
+  // 2. NOVA FUNCIÓ D'EXPORTACIÓ A EXCEL (FINALMENT CORREGIDA)
   const exportToExcel = (data, fileName) => {
     // 2.1 Mapeig de dades: Preparem l'array d'usuaris amb les columnes que volem a l'Excel
     const dataForExport = data.map(user => {
       // Intentem trobar el nom del gimnàs
       const gymName = gyms.find(g => g.id === user.gymId)?.name || 'N/A';
       
+      // >>>>> CORRECCIÓ CLAU: DEFINIR LA VARIABLE formattedDate AQUÍ <<<<<
+      // Utilitzem formatDateDDMMYYYY i substituïm el guionet (-) per una barra (/)
+      const formattedDate = user.birthday 
+        ? formatDateDDMMYYYY(user.birthday).replace(/-/g, '/') 
+        : 'N/A';
+      
       return {
         'Nom Complet': user.name || 'N/A',
         'Gimnàs': gymName,
-        'Data Aniversari': formattedDate,
+        'Data Aniversari': formattedDate, // Ara la variable existeix
         'Edat': user.birthday ? formatBirthdayWithAge(user.birthday).match(/\((\d+)\)/)?.[1] || 'N/A' : 'N/A', // Extreure només l'edat si és possible
         'Sessions Habituals': user.usualSessions && user.usualSessions.length > 0 ? user.usualSessions.join(', ') : '',
         'Telèfon': user.phone || '',
@@ -95,6 +101,20 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
         'ID (intern)': user.id, // ID intern per si el necessites
       };
     });
+
+    // 2.2 Creació del Full de Càlcul
+    const ws = XLSX.utils.json_to_sheet(dataForExport);
+    
+    // 2.3 Creació del Llibre de Treball i escriptura del fitxer
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Usuaris");
+    
+    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const dataBlob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+    
+    // 2.4 Desa el fitxer amb file-saver
+    saveAs(dataBlob, fileName + '.xlsx');
+  };
 
     // 2.2 Creació del Full de Càlcul
     const ws = XLSX.utils.json_to_sheet(dataForExport);
@@ -512,6 +532,7 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
 };
 
 export default Users;
+
 
 
 
