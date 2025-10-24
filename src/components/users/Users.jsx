@@ -85,7 +85,7 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
       return {
         'Nom Complet': user.name || 'N/A',
         'Gimnàs': gymName,
-        'Data Aniversari': user.birthday ? formatDate(user.birthday, 'dd/MM/yyyy') : 'N/A', // Usar la teva funció de format
+        'Data Aniversari': formattedDate,
         'Edat': user.birthday ? formatBirthdayWithAge(user.birthday).match(/\((\d+)\)/)?.[1] || 'N/A' : 'N/A', // Extreure només l'edat si és possible
         'Sessions Habituals': user.usualSessions && user.usualSessions.length > 0 ? user.usualSessions.join(', ') : '',
         'Telèfon': user.phone || '',
@@ -512,4 +512,5 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
 };
 
 export default Users;
+
 
