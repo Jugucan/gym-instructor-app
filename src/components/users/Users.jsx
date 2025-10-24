@@ -90,6 +90,7 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
         'Sessions Habituals': user.usualSessions && user.usualSessions.length > 0 ? user.usualSessions.join(', ') : '',
         'Telèfon': user.phone || '',
         'Email': user.email || '',
+        'URL Foto Perfil': user.photoUrl || '',
         'Notes': user.notes || '',
         'ID (intern)': user.id, // ID intern per si el necessites
       };
@@ -511,3 +512,4 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
 };
 
 export default Users;
+
