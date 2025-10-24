@@ -114,21 +114,7 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
     
     // 2.4 Desa el fitxer amb file-saver
     saveAs(dataBlob, fileName + '.xlsx');
-  };
-
-    // 2.2 Creació del Full de Càlcul
-    const ws = XLSX.utils.json_to_sheet(dataForExport);
-    
-    // 2.3 Creació del Llibre de Treball i escriptura del fitxer
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Usuaris");
-    
-    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const dataBlob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
-    
-    // 2.4 Desa el fitxer amb file-saver
-    saveAs(dataBlob, fileName + '.xlsx');
-  };
+  };    
   
   // --- MÈTODES EXISTENTS (handleSaveUser, handleDeleteUser, handleEditUser) ---
   
@@ -532,6 +518,7 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
 };
 
 export default Users;
+
 
 
 
