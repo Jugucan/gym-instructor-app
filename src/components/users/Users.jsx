@@ -1,10 +1,36 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 // Només necessitem importar les funcions de firestore, ja que les utilitats s'han inlinat.
 import { collection, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore'; 
 
-// 1. IMPORTAR LLIBRERIES D'EXPORTACIÓ (Deixem, assumint que es resolen en l'entorn d'execució)
-import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver'; 
+// 1. LLIBRERIES D'EXPORTACIÓ / IMPORTACIÓ:
+// Hem canviat les importacions de mòduls a globals (assumint que s'han carregat via <script> tags)
+// S'assumeix que XLSX i saveAs (de file-saver) estan disponibles globalment.
+const XLSX = typeof window.XLSX !== 'undefined' ? window.XLSX : null;
+const saveAs = typeof window.saveAs !== 'undefined' ? window.saveAs : null;
+
+// Funció per carregar scripts externs (necessari per a XLSX i FileSaver en entorns sense gestor de paquets)
+const loadScripts = () => {
+    const scriptsToLoad = [
+        { id: 'xlsx-script', src: 'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js' },
+        { id: 'filesaver-script', src: 'https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js' }
+    ];
+
+    scriptsToLoad.forEach(scriptInfo => {
+        if (!document.getElementById(scriptInfo.id)) {
+            const script = document.createElement('script');
+            script.src = scriptInfo.src;
+            script.id = scriptInfo.id;
+            document.head.appendChild(script);
+            console.log(`Script loaded: ${scriptInfo.src}`);
+        }
+    });
+};
+
+
+// Obtenim 'db' i '__app_id' de l'àmbit global o context (assumit en entorn Canvas)
+const db = typeof window.db !== 'undefined' ? window.db : null;
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
 
 // --- UTILITATS INLINE: Funció per construir rutes de Firestore (Anteriorment de firebasePaths.jsx) ---
 const getUserCollectionPath = (appId, userId, collectionName) => {
@@ -72,7 +98,7 @@ const MessageModal = ({ show, title, message, onConfirm, onCancel, isConfirm = f
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg shadow-xl w-96">
+      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
         <h2 className="text-xl font-bold text-gray-800 mb-4">{title}</h2>
         <p className="text-gray-700 mb-6">{message}</p>
         <div className="flex justify-end space-x-4">
@@ -98,49 +124,43 @@ const MessageModal = ({ show, title, message, onConfirm, onCancel, isConfirm = f
 // --- Fi de components i funcions inlines ---
 
 
-// Obtenim 'db' i '__app_id' de l'àmbit global o context (assumit en entorn Canvas)
-const db = typeof window.db !== 'undefined' ? window.db : null;
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
 /**
- * Analitza el text CSV i el converteix en un array d'objectes d'usuari.
+ * Analitza les dades d'una fulla de càlcul Excel i les converteix en un array d'objectes d'usuari.
  * S'espera que la primera columna sigui el Nom i la segona l'Email.
- * @param {string} text - Contingut complet del fitxer CSV.
+ * @param {Array<Object>} jsonData - Array d'objectes (fileres) extrets de la fulla de càcul.
  * @returns {{success: boolean, users: Array}}
  */
-const parseCSV = (text) => {
-    const lines = text.trim().split('\n');
-    if (lines.length < 2) return { success: false, users: [] }; 
-
-    // Intentem detectar el separador (coma o punt i coma) utilitzant la primera línia de dades
-    const firstDataLine = lines[1];
-    let delimiter = firstDataLine.includes(';') ? ';' : ',';
+const parseExcel = (jsonData) => {
+    if (!jsonData || jsonData.length < 1) return { success: false, users: [] }; 
+    if (!XLSX) return { success: false, users: [] };
 
     const usersToImport = [];
 
-    // Iterem des de la segona línia (índex 1), ja que la primera és la capçalera
-    for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue; 
+    // Obtenim els noms de les columnes de la primera fila
+    const keys = Object.keys(jsonData[0]);
+    
+    // Identificació de columnes (flexible: busca "Nom", "Name" i "Email")
+    const nameKey = keys.find(k => k.toLowerCase().includes('nom') || k.toLowerCase().includes('name'));
+    const emailKey = keys.find(k => k.toLowerCase().includes('email'));
+    
+    if (!nameKey || !emailKey) {
+        console.error("Excel format error: Missing 'Name' or 'Email' column.");
+        return { success: false, users: [] };
+    }
 
-        // Dividim la línia utilitzant el separador detectat
-        const values = line.split(delimiter).map(v => v.trim().replace(/"/g, '')); 
 
-        // S'esperen almenys dos valors (Nom i Email)
-        if (values.length < 2 || !values[0] || !values[1]) continue;
+    for (const row of jsonData) {
+        const name = row[nameKey]?.toString().trim();
+        const email = row[emailKey]?.toString().toLowerCase().trim();
 
-        const name = values[0];
-        const email = values[1].toLowerCase(); 
+        if (!name || !email) continue; 
 
         usersToImport.push({
             name: name,
             email: email,
-            // Afegim dades d'inicialització estàndard
             status: 'active',
             roles: ['client'], 
             createdAt: new Date().toISOString(),
-            // La resta de camps (birthday, sessions, notes, etc.) es deixen a valors per defecte o nuls
-            // ja que el CSV només proporciona Nom i Email
         });
     }
 
@@ -191,7 +211,7 @@ const saveUsersToFirestore = async (users, showMessage, setIsImporting) => {
         failedImports === 0 ? 'success' : 'warning'
     );
 };
-// --- Fi de Funcions d'Importació CSV ---
+// --- Fi de Funcions d'Importació/Exportació ---
 
 
 const Users = ({ users, gyms, db, currentUserId, appId }) => {
@@ -199,7 +219,7 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
   const [editingUser, setEditingUser] = useState(null);
   const [userName, setUserName] = useState('');
   const [userBirthday, setUserBirthday] = useState('');
-  const [userSessions, setUserSessions] = useState(''); // Comma-separated string for usual sessions
+  const [userSessions, setUserSessions] = useState(''); 
   const [userNotes, setUserNotes] = useState('');
   const [userGymId, setUserGymId] = useState('');
   const [userPhone, setUserPhone] = useState('');
@@ -209,8 +229,12 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
   
-  // NOU ESTAT PER LA IMPORTACIÓ CSV
   const [isImporting, setIsImporting] = useState(false);
+
+  // Carregar scripts en muntar el component per assegurar la disponibilitat de XLSX i FileSaver
+  useEffect(() => {
+    loadScripts();
+  }, []);
 
   // Dades de la taula
   const tableHeaders = ['Nom', 'Aniversari (Edat)', 'Email', 'Telèfon', 'Gimnàs', 'Sessions Habituals', 'Notes', 'Accions'];
@@ -319,12 +343,18 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
     setUserPhotoUrl('');
   };
 
-  // --- Funció per Exportar ---
+  // --- Funció per Exportar (No cal modificar) ---
   const handleExportUsers = () => {
     if (!users || users.length === 0) {
       showMessage('No hi ha dades', 'No hi ha dades d\'usuaris per exportar.', 'warning');
       return;
     }
+    
+    if (!XLSX || !saveAs) {
+        showMessage('Llibreries no disponibles', 'Les llibreries d\'exportació (XLSX/FileSaver) no s\'han carregat correctament. Recarrega la pàgina si el problema persisteix.', 'error');
+        return;
+    }
+
 
     const dataToExport = users.map(user => ({
       'ID Usuari': user.id,
@@ -332,7 +362,7 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
       'Email': user.email,
       'Telèfon': user.phone || '',
       'Data Naixement': user.birthday ? formatDateDDMMYYYY(user.birthday) : '',
-      'Edat': user.birthday ? formatBirthdayWithAge(user.birthday).match(/\((\d+)/)[1] : '',
+      'Edat': user.birthday ? formatBirthdayWithAge(user.birthday).match(/\((\d+)/)?.[1] || '' : '',
       'Gimnàs': gyms.find(gym => gym.id === user.gymId)?.name || 'Sense assignar',
       'Sessions Habituals': user.sessions?.join(', ') || '',
       'Notes': user.notes || '',
@@ -354,18 +384,24 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
     showMessage('Exportació OK', `S'han exportat ${users.length} usuaris/àries a Excel.`, 'success');
   };
 
-  // --- Funcions de Control d'Importació CSV ---
+  // --- Funcions de Control d'Importació Excel/CSV (MODIFICADA) ---
 
   /**
    * Controlador principal de l'arxiu pujat.
+   * Ara llegeix XLSX, XLS i CSV.
    * @param {Event} event - Esdeveniment de canvi de l'input de fitxer.
    */
   const handleImportUsers = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.csv')) {
-        showMessage('Format no vàlid', 'Si us plau, puja un fitxer amb l\'extensió .csv.', 'error');
+    if (!XLSX) {
+        showMessage('Llibreries no disponibles', 'La llibreria d\'importació (XLSX) no s\'ha carregat correctament. Recarrega la pàgina si el problema persisteix.', 'error');
+        return;
+    }
+
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls') && !file.name.endsWith('.csv')) {
+        showMessage('Format no vàlid', 'Si us plau, puja un fitxer .xlsx, .xls o .csv.', 'error');
         return;
     }
 
@@ -374,18 +410,42 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
     const reader = new FileReader();
 
     reader.onload = async (e) => {
-        const csvText = e.target.result;
-        const { success, users: usersToSave } = parseCSV(csvText);
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            
+            // Obtenim la primera fulla de càlcul (sheet)
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            
+            let usersToSave = [];
+            let success = false;
+            let formatUsed = '';
 
-        if (success) {
-            await saveUsersToFirestore(usersToSave, showMessage, setIsImporting);
-        } else {
+            // Tècnicament, sheet_to_json sense {header: 1} dóna objectes amb capçaleres (JSON)
+            // que és el que necessita parseExcel. Això funciona per a XLSX i CSV.
+            const rawData = XLSX.utils.sheet_to_json(worksheet);
+            const result = parseExcel(rawData);
+            
+            usersToSave = result.users;
+            success = result.success;
+            formatUsed = file.name.endsWith('.csv') ? 'CSV' : 'Excel';
+
+            if (success) {
+                await saveUsersToFirestore(usersToSave, showMessage, setIsImporting);
+            } else {
+                setIsImporting(false);
+                showMessage(
+                    'Error de format',
+                    `El fitxer ${formatUsed} no conté les columnes "Nom" i "Email" o no té dades vàlides.`,
+                    'error'
+                );
+            }
+
+        } catch (error) {
             setIsImporting(false);
-            showMessage(
-                'Error de format CSV',
-                'El fitxer no conté dades d\'usuari vàlides. Assegura\'t que tens les columnes "Nom" i "Email" i que està delimitat per coma (,) o punt i coma (;).',
-                'error'
-            );
+            console.error("Error processing file:", error);
+            showMessage('Error de lectura', 'Hi ha hagut un error en processar el fitxer. Assegura\'t que no estigui corrupte o que tingui el format correcte.', 'error');
         }
     };
 
@@ -394,12 +454,13 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
         showMessage('Error de lectura', 'No s\'ha pogut llegir el fitxer.', 'error');
     };
 
-    reader.readAsText(file, 'UTF-8');
+    // Llegir el fitxer com a ArrayBuffer, necessari per XLSX
+    reader.readAsArrayBuffer(file);
   };
 
   // Funció per netejar l'input de fitxer (necessari per tornar a pujar el mateix arxiu)
   const clearFileInput = () => {
-      const fileInput = document.getElementById('csv-file-input');
+      const fileInput = document.getElementById('excel-file-input');
       if (fileInput) {
           fileInput.value = '';
       }
@@ -433,19 +494,19 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
           <h2 className="text-xl font-semibold text-green-700 mb-4">Eines de Dades</h2>
           <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6">
               
-              {/* Grup d'Importació CSV */}
+              {/* Grup d'Importació Excel/CSV */}
               <div className="flex items-center space-x-3 w-full sm:w-auto">
                   <input
                       type="file"
-                      accept=".csv"
+                      accept=".xlsx, .xls, .csv"
                       onChange={handleImportUsers}
                       onClick={clearFileInput} 
                       disabled={isImporting}
                       className="hidden"
-                      id="csv-file-input"
+                      id="excel-file-input"
                   />
                   <label
-                      htmlFor="csv-file-input"
+                      htmlFor="excel-file-input"
                       className={`px-6 py-3 text-white rounded-lg shadow-md transition duration-150 cursor-pointer text-sm font-medium flex items-center justify-center min-w-[150px] ${
                           isImporting ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
                       }`}
@@ -458,9 +519,9 @@ const Users = ({ users, gyms, db, currentUserId, appId }) => {
                               </svg>
                               Important...
                           </div>
-                      ) : 'Importar CSV'}
+                      ) : 'Importar Excel/CSV'}
                   </label>
-                  <span className="text-xs text-gray-500 hidden sm:block">Nom (col. 1), Email (col. 2)</span>
+                  <span className="text-xs text-gray-500 hidden sm:block">Fitxer: .xlsx, .xls, .csv (Nom i Email obligatoris)</span>
               </div>
 
               {/* Botó d'Exportació XLSX */}
