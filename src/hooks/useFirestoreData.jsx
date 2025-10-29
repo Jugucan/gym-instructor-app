@@ -1,6 +1,37 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, where, doc, getDoc, setDoc, addDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc, getDoc, setDoc, addDoc, deleteDoc } from 'firebase/firestore'; // <<< NOU: deleteDoc importat
 import { getUserCollectionPath, getAppCollectionPath } from '../utils/firebasePaths.jsx';
+
+// --- NOU: Funcions d'Escriptura General ---
+
+/**
+ * Funció per afegir un nou document a una col·lecció de l'usuari.
+ */
+export const addDocument = async (db, appId, currentUserId, collectionName, data) => {
+    const path = getUserCollectionPath(appId, currentUserId, collectionName);
+    if (!path) throw new Error("Ruta de col·lecció invàlida.");
+    
+    // Utilitzem addDoc que genera automàticament l'ID
+    const docRef = await addDoc(collection(db, path), data);
+    return { success: true, id: docRef.id };
+};
+
+/**
+ * Funció per eliminar un document d'una col·lecció de l'usuari.
+ */
+export const deleteDocument = async (db, appId, currentUserId, collectionName, docId) => {
+    const path = getUserCollectionPath(appId, currentUserId, collectionName);
+    if (!path) throw new Error("Ruta de col·lecció invàlida.");
+    
+    // Obté la referència al document
+    const docRef = doc(db, path, docId);
+    
+    // Elimina el document
+    await deleteDoc(docRef);
+    return { success: true };
+};
+
+// --- EL TEU HOOK useFirestoreData (Sense Canvis Interns Més Enllà dels Imports) ---
 
 const useFirestoreData = (db, currentUserId, appId, isFirebaseReady, setLoadingMessage, setShowMessageModal, setMessageModalContent) => {
   const [programs, setPrograms] = useState([]);
@@ -10,7 +41,7 @@ const useFirestoreData = (db, currentUserId, appId, isFirebaseReady, setLoadingM
   const [recurringSessions, setRecurringSessions] = useState([]);
   const [scheduleOverrides, setScheduleOverrides] = useState([]);
   const [missedDays, setMissedDays] = useState([]);
-  const [gymClosures, setGymClosures] = useState([]); // AFEGIT: gymClosures
+  const [gymClosures, setGymClosures] = useState([]); 
   const [dataLoaded, setDataLoaded] = useState(false);
 
   // Default initial data for quick setup if Firestore is empty
@@ -215,7 +246,12 @@ const useFirestoreData = (db, currentUserId, appId, isFirebaseReady, setLoadingM
           if (collectionName === 'fixedSchedules') {
               setData(data.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()));
           } else {
-              setData(data);
+              // Special handling for gyms to ensure sorting by name
+              if (collectionName === 'gyms') { // <<< NOU: Ordenar els gimnasos per nom
+                setData(data.sort((a, b) => a.name.localeCompare(b.name))); 
+              } else {
+                setData(data);
+              }
           }
           markCollectionLoaded();
         }
