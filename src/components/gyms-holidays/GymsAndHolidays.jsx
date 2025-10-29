@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { collection, addDoc, doc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { getUserCollectionPath } from '../../utils/firebasePaths.jsx';
+// Importem les funcions d'escriptura (addDocument, deleteDocument)
+import { addDocument, deleteDocument } from '../../hooks/useFirestoreData'; // <<< NOU IMPORT
 // Importem la funció d'ajuda, però la utilitzarem de manera diferent
 import { formatDateDDMMYYYY } from '../../utils/dateHelpers.jsx'; 
 import { MessageModal } from '../common/MessageModal.jsx';
 
+// [El teu array publicHolidays2025 es manté intacte]
 const publicHolidays2025 = [
   // Aquestes dades es mantenen en DD-MM-YYYY perquè només són informatives
   { date: '11-09-2025', name: 'Diada Nacional de Catalunya', type: 'regional' },
@@ -28,6 +31,7 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId, onGymsUp
   const [newHolidayStart, setNewHolidayStart] = useState('');
   const [newHolidayEnd, setNewHolidayEnd] = useState('');
   const [newHolidayReason, setNewHolidayReason] = useState('');
+  const [newGymName, setNewGymName] = useState(''); // <<< NOU: Estat per afegir gimnàs
   const [showClosureModal, setShowClosureModal] = useState(false);
   const [closureDate, setClosureDate] = useState('');
   const [closureNotes, setClosureNotes] = useState('');
@@ -43,7 +47,111 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId, onGymsUp
     setNewHolidayEnd('');
     setNewHolidayReason('');
   };
+  
+  // -------------------------------------------------------------------
+  // --- NOU: Lògica d'AFEGIR Centre ---
+  // -------------------------------------------------------------------
+  const handleAddGym = async (e) => {
+      e.preventDefault();
+      if (!newGymName.trim()) {
+          setMessageModalContent({
+              title: 'Error de Validació',
+              message: 'El nom del centre no pot estar buit.',
+              onConfirm: () => setShowMessageModal(false),
+              isConfirm: false
+          });
+          setShowMessageModal(true);
+          return;
+      }
+      if (!db || !currentUserId || !appId) {
+        setMessageModalContent({
+            title: 'Error de Connexió',
+            message: 'No s\'ha pogut connectar amb la base de dades.',
+            onConfirm: () => setShowMessageModal(false),
+            isConfirm: false
+        });
+        setShowMessageModal(true);
+        return;
+      }
 
+      // Preparem les dades inicials del nou gimnàs
+      const gymData = {
+          name: newGymName.trim(),
+          workDays: ['Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres'], // Dades inicials per defecte
+          totalVacationDays: 0, 
+          holidaysTaken: [],
+          createdAt: new Date().toISOString(),
+      };
+
+      try {
+          const result = await addDocument(db, appId, currentUserId, 'gyms', gymData);
+          
+          if (result.success) {
+              setMessageModalContent({
+                  title: 'Centre Afegit ✅',
+                  message: `El centre '${newGymName.trim()}' s'ha afegit correctament.`,
+                  onConfirm: () => setShowMessageModal(false),
+                  isConfirm: false
+              });
+              setShowMessageModal(true);
+              setNewGymName(''); // Neteja l'input
+              // No cal cridar onGymsUpdate ja que onSnapshot del hook ja actualitzarà 'gyms'
+          }
+      } catch (error) {
+          console.error("Error afegint centre:", error);
+          setMessageModalContent({
+              title: 'Error ❌',
+              message: `Hi ha hagut un error al registrar el centre: ${error.message}`,
+              onConfirm: () => setShowMessageModal(false),
+              isConfirm: false
+          });
+          setShowMessageModal(true);
+      }
+  };
+
+  // -------------------------------------------------------------------
+  // --- NOU: Lògica d'ELIMINAR Centre ---
+  // -------------------------------------------------------------------
+  const handleDeleteGym = (gymId, gymName) => {
+      if (!db || !currentUserId || !appId) return;
+
+      setMessageModalContent({
+          title: 'Confirmar Eliminació',
+          message: `ATENCIÓ: Estàs segur que vols eliminar el centre '${gymName}'? Aquesta acció és irreversible i ELIMINARÀ TOTES LES SESSIONS I DADES RELACIONADES amb aquest centre.`,
+          isConfirm: true,
+          onConfirm: async () => {
+              try {
+                  const result = await deleteDocument(db, appId, currentUserId, 'gyms', gymId);
+
+                  if (result.success) {
+                      setMessageModalContent({
+                          title: 'Centre Eliminat ✔️',
+                          message: `El centre '${gymName}' ha estat eliminat correctament.`,
+                          onConfirm: () => setShowMessageModal(false),
+                          isConfirm: false
+                      });
+                      // Si el gimnàs eliminat era el seleccionat, netejem el selector
+                      if (selectedGym === gymId) {
+                          setSelectedGym('');
+                      }
+                  }
+              } catch (error) {
+                  console.error("Error eliminant centre:", error);
+                  setMessageModalContent({
+                      title: 'Error ❌',
+                      message: `No s'ha pogut eliminar el centre. Detalls: ${error.message}`,
+                      onConfirm: () => setShowMessageModal(false),
+                      isConfirm: false
+                  });
+              }
+              setShowMessageModal(true); // Mostra el modal de resultat
+          },
+          onCancel: () => setShowMessageModal(false)
+      });
+      setShowMessageModal(true);
+  };
+  
+  // [La teva funció handleAddHoliday es manté intacta]
   const handleAddHoliday = async (e) => {
     e.preventDefault();
     if (!currentGym || !newHolidayStart || !newHolidayEnd) {
@@ -129,6 +237,7 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId, onGymsUp
     }
   };
 
+  // [La teva funció handleRemoveHoliday es manté intacta]
   const handleRemoveHoliday = async (date) => {
     if (!currentGym || !db || !currentUserId || !appId) return;
 
@@ -164,6 +273,7 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId, onGymsUp
     setShowMessageModal(true);
   };
   
+  // [La teva funció parseDateForSorting es manté intacta]
   // Aquesta funció converteix AAAA-MM-DD a un objecte Date per a poder ordenar-les.
   // Assumim que a la BD tenim AAAA-MM-DD
   const parseDateForSorting = (dateStr) => {
@@ -173,6 +283,7 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId, onGymsUp
   };
 
 
+  // [La teva funció handleAddGymClosure es manté intacta]
   const handleAddGymClosure = async () => {
     if (!closureDate || !db || !currentUserId || !appId) {
       // ... (missatge d'error)
@@ -204,6 +315,7 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId, onGymsUp
     }
   };
 
+  // [La teva funció handleDeleteGymClosure es manté intacta]
   const handleDeleteGymClosure = async (closureId) => {
     if (!db || !currentUserId || !appId) return;
 
@@ -233,13 +345,58 @@ const GymsAndHolidays = ({ gyms, gymClosures, db, currentUserId, appId, onGymsUp
     });
     setShowMessageModal(true);
   };
+  
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-inter">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Gestió de Centres i Dies Festius</h1>
 
+      {/* ------------------------------------------------------------------- */}
+      {/* --- NOU: Secció de Gestió de Centres --- */}
+      {/* ------------------------------------------------------------------- */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold text-gray-700 mb-4">Administrar Centres/Gimnasos 🏋️</h2>
+        
+        {/* Formulari per Afegir Centre */}
+        <form onSubmit={handleAddGym} className="flex flex-col sm:flex-row gap-3 mb-6 p-4 border rounded-lg bg-blue-50">
+            <input
+                type="text"
+                placeholder="Nom del nou centre (Ex: Gimnàs Poble Nou)"
+                value={newGymName}
+                onChange={(e) => setNewGymName(e.target.value)}
+                className="flex-grow shadow-sm sm:text-sm border-gray-300 rounded-md p-2"
+                required
+            />
+            <button type="submit" className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out w-full sm:w-auto">
+                Afegir Centre
+            </button>
+        </form>
+
+        {/* Llista de Centres Existents */}
+        <h3 className="text-lg font-semibold text-gray-700 mt-4 mb-3">Centres Existents ({gyms.length})</h3>
+        {gyms && gyms.length > 0 ? (
+            <ul className="space-y-2">
+                {/* L'ordenació per nom ja la fa el hook useFirestoreData */}
+                {gyms.map(gym => (
+                    <li key={gym.id} className="flex justify-between items-center bg-gray-100 p-3 rounded-lg border-l-4 border-blue-500">
+                        <span className="font-semibold text-gray-800">{gym.name}</span>
+                        <button
+                            onClick={() => handleDeleteGym(gym.id, gym.name)}
+                            className="text-red-500 hover:text-red-700 transition-colors duration-200 ml-4"
+                            title={`Eliminar el centre ${gym.name}`}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.72-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 10-2 0v6a1 1 0 102 0V8z" clipRule="evenodd"/></svg>
+                        </button>
+                    </li>
+                ))}
+            </ul>
+        ) : (
+            <p className="text-gray-500 italic">No hi ha centres registrats. Afegiu el primer centre a dalt.</p>
+        )}
+      </div>
+
       {/* Secció Tancaments Generals (Festius) */}
-      <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Tancaments Generals (Festius)</h2>
         
         <button
